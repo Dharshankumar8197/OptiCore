@@ -135,4 +135,7 @@ if (-not [string]::IsNullOrWhiteSpace($publicUrl)) {
     Write-Host "ℹ️  Running in local-only mode (no Ngrok token provided)." -ForegroundColor Yellow
 }
 Write-Host "===========================================================" -ForegroundColor Green
-Write-Host "View container logs anytime with: docker logs -f $ContainerName`n" -ForegroundColor Cyan
+Write-Host "View container logs anytime with: docker logs -f $ContainerName" -ForegroundColor Cyan
+Write-Host "[*] Launching live logs monitor in a dedicated PowerShell window..." -ForegroundColor Cyan
+Start-Process powershell.exe -ArgumentList "-NoExit", "-Command", "`$Host.UI.RawUI.WindowTitle = 'OptiCore Backend Logs'; Write-Host '===========================================================' -ForegroundColor Cyan; Write-Host '   OptiCore Backend Live Logs Stream (Ctrl+C to stop)      ' -ForegroundColor Cyan; Write-Host '===========================================================' -ForegroundColor Cyan; docker logs -f $ContainerName"
+Write-Host ""

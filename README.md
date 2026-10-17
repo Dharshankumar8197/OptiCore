@@ -65,6 +65,20 @@ If `.env` or `web/.env.local` does not exist, the script automatically generates
 
 ---
 
+## 📜 Live Container Logs
+
+View and stream real-time inference and server logs anytime:
+
+```powershell
+# Pop open live logs in a separate dedicated PowerShell window:
+.\logs.ps1 -NewWindow
+
+# Or stream logs directly in current terminal:
+.\logs.ps1
+```
+
+---
+
 ## 🐳 Running with Docker Desktop
 
 1. Start **Docker Desktop** on your PC.
