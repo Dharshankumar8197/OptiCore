@@ -1,0 +1,473 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --font-sans: var(--font-inter);
+}
+
+/* ============================================================
+   OPTICORE DESIGN SYSTEM — PREMIUM DARK GLASS
+   ============================================================ */
+
+:root {
+  /* ── Core background ─────────────────────────────────── */
+  --oc-bg:    #080A10;
+  --oc-bg-1:  #090B12;
+  --oc-bg-2:  #0C0E18;
+
+  /* ── Accent palette ──────────────────────────────────── */
+  --oc-accent:         #9B8AFB;
+  --oc-accent-2:       #6FA8FF;
+  --oc-accent-rgb:     155, 138, 251;
+  --oc-accent-2-rgb:   111, 168, 255;
+
+  /* ── Ambient light sources ───────────────────────────── */
+  --oc-violet:  rgba(91, 71, 150, 0.18);
+  --oc-indigo:  rgba(50, 55, 140, 0.14);
+  --oc-blue:    rgba(40, 92, 130, 0.16);
+
+  /* ── Glass system ────────────────────────────────────── */
+  --glass-03: rgba(255, 255, 255, 0.030);
+  --glass-05: rgba(255, 255, 255, 0.050);
+  --glass-07: rgba(255, 255, 255, 0.070);
+  --glass-10: rgba(255, 255, 255, 0.100);
+  --glass-border:        rgba(255, 255, 255, 0.10);
+  --glass-border-bright: rgba(255, 255, 255, 0.16);
+  --glass-highlight:     rgba(255, 255, 255, 0.07);
+  --glass-blur:          blur(24px) saturate(180%);
+
+  /* ── Typography ──────────────────────────────────────── */
+  --text-primary:   #F5F7FA;
+  --text-secondary: #C4CAD4;
+  --text-muted:     #9AA2AE;
+  --text-accent:    #9B8AFB;
+
+  /* ── Status ──────────────────────────────────────────── */
+  --status-online:  #72D6A3;
+  --status-offline: #E47D87;
+  --status-standby: #E7B96B;
+  --status-loading: #6FA8FF;
+
+  /* ── Radius ──────────────────────────────────────────── */
+  --radius-xs:   8px;
+  --radius-sm:   12px;
+  --radius-md:   18px;
+  --radius-lg:   24px;
+  --radius-xl:   32px;
+  --radius-full: 9999px;
+}
+
+/* ============================================================
+   RESET & BASE
+   ============================================================ */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  background: var(--oc-bg);
+  color: var(--text-primary);
+  font-family: var(--font-sans), 'Inter', system-ui, -apple-system, sans-serif;
+  min-height: 100vh;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ============================================================
+   GLASS PANEL SYSTEM
+   ============================================================ */
+
+/* Base glass — subtle tint, medium blur */
+.glass {
+  background: rgba(255, 255, 255, 0.070);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 25px 80px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+/* Dim glass — for background panels */
+.glass-dim {
+  background: rgba(255, 255, 255, 0.028);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.24);
+}
+
+/* Bright glass — for cards and active states */
+.glass-bright {
+  background: rgba(255, 255, 255, 0.085);
+  backdrop-filter: blur(32px) saturate(200%);
+  -webkit-backdrop-filter: blur(32px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow:
+    0 32px 80px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.10);
+}
+
+/* Camera viewport glass */
+.glass-camera {
+  background: rgba(6, 8, 14, 0.88);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 40px 100px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+/* ============================================================
+   NAVIGATION GLASS
+   ============================================================ */
+
+.glass-nav {
+  background: rgba(255, 255, 255, 0.060);
+  backdrop-filter: blur(32px) saturate(200%);
+  -webkit-backdrop-filter: blur(32px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.30),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.glass-nav-item-active {
+  background: rgba(255, 255, 255, 0.105);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.10);
+}
+
+/* ============================================================
+   TYPOGRAPHY
+   ============================================================ */
+
+.text-wordmark {
+  font-size: 14px;
+  font-weight: 300;
+  letter-spacing: 0.32em;
+  color: var(--text-primary);
+  text-transform: uppercase;
+}
+
+.text-wordmark-lg {
+  font-size: 20px;
+  font-weight: 200;
+  letter-spacing: 0.38em;
+  color: var(--text-primary);
+  text-transform: uppercase;
+}
+
+.text-subtitle {
+  font-size: 8.5px;
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.text-label {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.text-value {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--text-secondary);
+  letter-spacing: 0.03em;
+}
+
+.text-metric {
+  font-size: 20px;
+  font-weight: 200;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.text-nano {
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 0.20em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+/* ============================================================
+   HUD / CHIP ELEMENTS
+   ============================================================ */
+
+.hud-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-full);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.hud-dot-online {
+  flex-shrink: 0;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--status-online);
+  box-shadow: 0 0 6px var(--status-online);
+}
+
+.hud-dot-offline {
+  flex-shrink: 0;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--status-offline);
+}
+
+.hud-dot-standby {
+  flex-shrink: 0;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--status-standby);
+  box-shadow: 0 0 5px var(--status-standby);
+}
+
+.hud-dot-loading {
+  flex-shrink: 0;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--status-loading);
+  box-shadow: 0 0 5px var(--status-loading);
+}
+
+/* ============================================================
+   STATUS INDICATOR — used in header
+   ============================================================ */
+
+.status-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.status-indicator-label {
+  font-size: 7.5px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  color: rgba(255, 255, 255, 0.28);
+  text-transform: uppercase;
+}
+
+/* ============================================================
+   DATA ROW — used in info cards
+   ============================================================ */
+
+.data-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+}
+
+.data-row:last-child {
+  border-bottom: none;
+}
+
+.data-row-label {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  color: rgba(255, 255, 255, 0.30);
+  text-transform: uppercase;
+}
+
+.data-row-value {
+  font-size: 12px;
+  font-weight: 300;
+  letter-spacing: 0.03em;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.data-row-value-accent {
+  color: var(--text-accent);
+}
+
+/* ============================================================
+   DETECTION BOUNDING BOX
+   ============================================================ */
+
+.detection-box {
+  position: absolute;
+  border: 1px solid rgba(155, 138, 251, 0.60);
+  border-radius: 5px;
+  pointer-events: none;
+  box-shadow: 0 0 12px rgba(155, 138, 251, 0.15);
+}
+
+.detection-label {
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  padding: 2px 7px;
+  background: rgba(8, 10, 16, 0.80);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(155, 138, 251, 0.25);
+  border-radius: 4px 4px 4px 0;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.85);
+  white-space: nowrap;
+}
+
+/* ============================================================
+   SCROLLBAR
+   ============================================================ */
+
+::-webkit-scrollbar { width: 3px; height: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.09);
+  border-radius: 2px;
+}
+
+/* ============================================================
+   GLASS SLIDER
+   ============================================================ */
+
+input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.10);
+  border-radius: 1px;
+  outline: none;
+  cursor: pointer;
+  width: 100%;
+}
+
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+input[type='range']::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+
+/* ============================================================
+   KEYFRAME ANIMATIONS
+   ============================================================ */
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.65; }
+  50%       { opacity: 1.0; }
+}
+
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.25; }
+}
+
+@keyframes float-y {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-14px); }
+}
+
+@keyframes float-gentle {
+  0%, 100% { transform: translateY(0px) translateX(0px); }
+  33%       { transform: translateY(-8px) translateX(4px); }
+  66%       { transform: translateY(4px) translateX(-4px); }
+}
+
+@keyframes rotate-slow {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+@keyframes laser-sweep {
+  0%   { transform: translateY(0%); opacity: 0.7; }
+  50%  { transform: translateY(100%); opacity: 1.0; }
+  100% { transform: translateY(0%); opacity: 0.7; }
+}
+
+@keyframes reticle-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.75; }
+  50%      { transform: scale(1.04); opacity: 1.0; }
+}
+
+.animate-laser-sweep  { animation: laser-sweep 2.8s ease-in-out infinite; }
+.animate-reticle      { animation: reticle-pulse 2s ease-in-out infinite; }
+.animate-live-pulse   { animation: live-pulse 1.8s ease-in-out infinite; }
+.animate-pulse-glow   { animation: pulse-glow 3s ease-in-out infinite; }
+.animate-float-y      { animation: float-y 14s ease-in-out infinite; }
+.animate-float-gentle { animation: float-gentle 18s ease-in-out infinite; }
+.animate-rotate-slow  { animation: rotate-slow 60s linear infinite; }
+
+/* ============================================================
+   PAGE TRANSITION
+   ============================================================ */
+
+.page-enter {
+  animation: pageEnter 0.3s ease-out forwards;
+}
+
+@keyframes pageEnter {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   CONTRAST UTILITIES — added for readability pass
+   ============================================================ */
+
+.text-shadow-contrast {
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* Ensure data-row labels/values are readable on glass */
+.data-row-label {
+  color: var(--text-muted) !important;
+}
+
+.data-row-value {
+  color: var(--text-primary) !important;
+}
+
+/* Status chip text */
+.status-indicator-label {
+  color: var(--text-muted) !important;
+}

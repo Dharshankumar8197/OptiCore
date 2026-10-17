@@ -1,0 +1,14 @@
+version: "2"
+authtoken_from_env: true
+
+tunnels:
+  web:
+    proto: http
+    addr: web:3000
+    schemes:
+      - https
+  backend:
+    proto: http
+    addr: backend:8000
+    schemes:
+      - https
