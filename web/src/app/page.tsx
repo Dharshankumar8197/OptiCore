@@ -8,14 +8,8 @@ import { OpticoreLogo } from '@/components/OpticoreLogo';
 import { DashboardPage, DashboardSystemState } from '@/components/pages/DashboardPage';
 import { ModelPage, ModelPageSystemState } from '@/components/pages/ModelPage';
 import { ConnectivityPage, ConnectivitySystemState } from '@/components/pages/ConnectivityPage';
-import { apiClient } from '@/lib/api';
-
-const rawWsUrl = process.env.NEXT_PUBLIC_WS_URL ?? (
-  process.env.NEXT_PUBLIC_API_URL
-    ? process.env.NEXT_PUBLIC_API_URL.replace(/^http/, 'ws')
-    : 'ws://localhost:8000'
-);
-const WS_URL = rawWsUrl.replace(/\/+$/, '');
+import { SettingsPage } from '@/components/pages/SettingsPage';
+import { apiClient, getWsBase } from '@/lib/api';
 
 /* ── Full system state ─────────────────────────────────────────────────── */
 interface SystemState {
@@ -62,22 +56,7 @@ const DEFAULT: SystemState = {
   batteryPercent: null, batteryPlugged: null,
 };
 
-/* ── Settings page ─────────────────────────────────────────────────────── */
-function SettingsPage() {
-  return (
-    <div style={{ flex:1,display:'flex',alignItems:'center',justifyContent:'center' }} className="page-enter">
-      <div style={{ padding:'36px 40px',background:'rgba(255,255,255,0.05)',backdropFilter:'blur(24px)',
-        WebkitBackdropFilter:'blur(24px)',border:'1px solid rgba(255,255,255,0.10)',borderRadius:24,textAlign:'center',maxWidth:320 }}>
-        <span style={{ fontSize:9,fontWeight:600,letterSpacing:'0.24em',color:'var(--text-muted)',textTransform:'uppercase',display:'block',marginBottom:10 }}>
-          Settings
-        </span>
-        <span style={{ fontSize:12,fontWeight:300,color:'var(--text-secondary)',letterSpacing:'0.04em' }}>
-          Configuration panel coming soon.
-        </span>
-      </div>
-    </div>
-  );
-}
+
 
 /* ── Header status chips ───────────────────────────────────────────────── */
 function HeaderChip({ label, active }: { label: string; active: boolean }) {
@@ -148,7 +127,7 @@ export default function OptiCoreApp() {
 
     const connect = () => {
       try {
-        ws = new WebSocket(`${WS_URL}/ws/inference`);
+        ws = new WebSocket(`${getWsBase()}/ws/inference`);
         ws.onopen  = () => {
           setState(prev => ({ ...prev, backendOnline: true }));
         };

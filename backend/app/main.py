@@ -85,6 +85,14 @@ try:
 except ImportError:
     logger.warning("Wi-Fi module not yet available")
 
+# Unified Optical Connectivity router (Sonar pulse, App Users, Mesh endpoints)
+try:
+    from app.api import connectivity as connectivity_module
+    app.include_router(connectivity_module.router)
+    logger.info("Connectivity router registered")
+except ImportError as e:
+    logger.warning(f"Connectivity module not loaded: {e}")
+
 # Warm-load YOLO model at startup
 try:
     from app import inference as inference_module

@@ -4,8 +4,41 @@
  * Types mirror the backend Pydantic schemas exactly (field names, optionals).
  */
 
-const rawApiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
-const API_BASE = rawApiBase.replace(/\/+$/, '');
+export function getApiBase(): string {
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('opticore_api_url');
+    if (saved && saved.trim()) return saved.trim().replace(/\/+$/, '');
+  }
+  const rawApiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+  return rawApiBase.replace(/\/+$/, '');
+}
+
+export function getWsBase(): string {
+  if (typeof window !== 'undefined') {
+    const savedWs = localStorage.getItem('opticore_ws_url');
+    if (savedWs && savedWs.trim()) return savedWs.trim().replace(/\/+$/, '');
+    const savedApi = localStorage.getItem('opticore_api_url');
+    if (savedApi && savedApi.trim()) {
+      return savedApi.trim().replace(/^http/, 'ws').replace(/\/+$/, '');
+    }
+  }
+  const rawWsUrl = process.env.NEXT_PUBLIC_WS_URL ?? (
+    process.env.NEXT_PUBLIC_API_URL
+      ? process.env.NEXT_PUBLIC_API_URL.replace(/^http/, 'ws')
+      : 'ws://localhost:8000'
+  );
+  return rawWsUrl.replace(/\/+$/, '');
+}
+
+export function setServerUrl(apiUrl: string, wsUrl?: string) {
+  if (typeof window === 'undefined') return;
+  const cleanApi = apiUrl.trim().replace(/\/+$/, '');
+  localStorage.setItem('opticore_api_url', cleanApi);
+  const cleanWs = wsUrl && wsUrl.trim()
+    ? wsUrl.trim().replace(/\/+$/, '')
+    : cleanApi.replace(/^http/, 'ws');
+  localStorage.setItem('opticore_ws_url', cleanWs);
+}
 
 // ── Response types ────────────────────────────────────────────────────────────
 
@@ -139,6 +172,64 @@ export interface TTSTestResponse {
   routed_to: string;
 }
 
+export interface OpticalEndpoint {
+  id: string;
+  name: string;
+  endpoint_category: 'app_user' | 'camera' | 'earbuds' | 'speaker' | 'device';
+  connection_mode: 'wifi' | 'bluetooth' | 'usb';
+  status: string;
+  address?: string | null;
+  signal_strength?: number | null;
+  capabilities: string[];
+  camera_status?: string | null;
+  camera_label?: string | null;
+  user_name?: string | null;
+  stream_url?: string | null;
+  is_app_user: boolean;
+  is_tts_sink: boolean;
+  resolution?: string | null;
+}
+
+export interface HostNetworkInfo {
+  wifi_connected: boolean;
+  wifi_ssid: string | null;
+  wifi_ip: string | null;
+  wifi_interface: string | null;
+  wifi_signal_dbm: number | null;
+  bluetooth_adapter_available: boolean;
+  usb_device_count: number;
+}
+
+export interface TTSRouteInfo {
+  active: boolean;
+  routed_to: string;
+  device_address?: string | null;
+  sink_type: 'earbuds' | 'speaker' | 'system';
+}
+
+export interface ConnectivityScanResponse {
+  scan_timestamp: string;
+  host: HostNetworkInfo;
+  endpoints: OpticalEndpoint[];
+  tts_route: TTSRouteInfo;
+}
+
+export interface ShareCameraPayload {
+  user_name: string;
+  device_name: string;
+  camera_facing?: 'front' | 'rear';
+  is_public?: boolean;
+  stream_url?: string;
+  resolution?: string;
+}
+
+export interface ShareCameraResponse {
+  status: string;
+  endpoint_id: string;
+  message: string;
+  endpoint: OpticalEndpoint;
+}
+
 export interface WiFiNetwork {
   ssid: string;
   bssid: string | null;
@@ -173,7 +264,8 @@ async function apiFetch<T>(
       Object.assign(headers, options.headers);
     }
 
-    const res = await fetch(`${API_BASE}${path}`, {
+    const baseUrl = getApiBase();
+    const res = await fetch(`${baseUrl}${path}`, {
       ...options,
       signal: controller.signal,
       headers,
@@ -266,7 +358,8 @@ export const apiClient = {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 15000);
     try {
-      const res = await fetch(`${API_BASE}/api/model/detect`, {
+      const baseUrl = getApiBase();
+      const res = await fetch(`${baseUrl}/api/model/detect`, {
         method: 'POST',
         body: formData,
         signal: controller.signal,
@@ -332,5 +425,41 @@ export const apiClient = {
 
   disconnectWifi(): Promise<{ status: string }> {
     return apiFetch('/api/wifi/disconnect', { method: 'POST' });
+  },
+
+  // ── Unified Connectivity & Sonar Mesh ───────────────────────────────────────
+  scanConnectivity(): Promise<ConnectivityScanResponse> {
+    return apiFetch<ConnectivityScanResponse>('/api/connectivity/scan', undefined, 12000);
+  },
+
+  shareCamera(payload: ShareCameraPayload): Promise<ShareCameraResponse> {
+    return apiFetch<ShareCameraResponse>('/api/connectivity/share-camera', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  unshareCamera(endpointId: string): Promise<{ status: string }> {
+    return apiFetch<{ status: string }>(`/api/connectivity/share-camera/${endpointId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  connectEndpoint(endpointId: string): Promise<{
+    status: string;
+    endpoint_id: string;
+    type?: string;
+    camera_access?: string;
+    tts_routed?: boolean;
+    message?: string;
+    stream_url?: string;
+  }> {
+    return apiFetch(`/api/connectivity/connect-endpoint/${endpointId}`, {
+      method: 'POST',
+    });
+  },
+
+  triggerTtsTest(): Promise<TTSTestResponse> {
+    return apiFetch<TTSTestResponse>('/api/connectivity/tts-test', { method: 'POST' }, 12000);
   },
 };

@@ -108,44 +108,63 @@ const DashboardScreen = () => (
   </ScrollView>
 );
 
-const DevicesScreen = () => (
-  <ScrollView style={styles.container}>
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-      <View>
-        <Text style={styles.pageTitle}>Devices</Text>
-        <Text style={styles.pageSubtitle}>Manage your OptiCore hardware</Text>
-      </View>
-      <TouchableOpacity style={styles.btnPrimary}>
-        <Text style={styles.btnPrimaryText}>Add Device</Text>
-      </TouchableOpacity>
-    </View>
+const DevicesScreen = () => {
+  const [meshEndpoints, setMeshEndpoints] = useState([
+    { id: '1', name: 'OptiCore Pi — Living Room', mode: 'Wi-Fi', type: 'device', status: 'online', details: '192.168.1.108 · Node' },
+    { id: '2', name: 'OptiCore Wireless Earbuds', mode: 'Bluetooth', type: 'earbuds', status: 'connected', details: 'TTS Audio Output Active' },
+    { id: '3', name: 'Field Operative (Android)', mode: 'Wi-Fi', type: 'app_user', status: 'online', details: 'Camera Shared · Public' },
+    { id: '4', name: 'USB HD Optical Cam', mode: 'USB', type: 'camera', status: 'connected', details: '1080p @ 30fps' }
+  ]);
 
-    {[
-      { id: '1', name: 'OptiCore Pi — Home', status: 'online', version: '1.0.0' },
-      { id: '2', name: 'OptiCore Pi — Outdoor', status: 'offline', version: '0.9.8' },
-      { id: '3', name: 'OptiCore Test Camera', status: 'connected', version: '1.0.0' }
-    ].map(d => (
-      <View key={d.id} style={styles.card}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={{ fontSize: 16, fontWeight: '600', color: theme.textDark }}>{d.name}</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme.bg, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 }}>
-            <View style={[styles.statusIndicator, d.status === 'online' ? { backgroundColor: theme.success } : d.status === 'connected' ? { backgroundColor: theme.primary } : { backgroundColor: theme.error }]} />
-            <Text style={{ fontSize: 12, color: theme.textDark }}>{d.status.toUpperCase()}</Text>
+  return (
+    <ScrollView style={styles.container}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <View>
+          <Text style={styles.pageTitle}>Optical Mesh</Text>
+          <Text style={styles.pageSubtitle}>Sonar Endpoints (Wi-Fi · BT · USB)</Text>
+        </View>
+        <TouchableOpacity style={styles.btnPrimary}>
+          <Text style={styles.btnPrimaryText}>Ping Sonar</Text>
+        </TouchableOpacity>
+      </View>
+
+      {meshEndpoints.map(d => (
+        <View key={d.id} style={styles.card}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={{ fontSize: 16, fontWeight: '600', color: theme.textDark }}>{d.name}</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme.bg, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 }}>
+              <View style={[styles.statusIndicator, d.status === 'online' || d.status === 'connected' ? { backgroundColor: theme.success } : { backgroundColor: theme.warning }]} />
+              <Text style={{ fontSize: 11, fontWeight: '600', color: theme.textDark }}>{d.mode}</Text>
+            </View>
+          </View>
+          <Text style={{ marginTop: 8, color: theme.textSecondary, fontSize: 13 }}>{d.details}</Text>
+          <View style={{ flexDirection: 'row', marginTop: 14, gap: 10 }}>
+            {d.type === 'app_user' || d.type === 'camera' ? (
+              <TouchableOpacity style={[styles.btnPrimary, { flex: 1, backgroundColor: theme.primary }]}>
+                <Text style={[styles.btnPrimaryText, { textAlign: 'center' }]}>View Camera</Text>
+              </TouchableOpacity>
+            ) : d.type === 'earbuds' ? (
+              <TouchableOpacity style={[styles.btnPrimary, { flex: 1, backgroundColor: '#60A5FA' }]}>
+                <Text style={[styles.btnPrimaryText, { textAlign: 'center' }]}>🔊 TTS Active</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={[styles.btnSecondary, { flex: 1 }]}>
+                <Text style={styles.btnSecondaryText}>Connect Node</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
-        <Text style={{ marginTop: 12, color: theme.textSecondary, fontSize: 14 }}>Version: {d.version}</Text>
-        <View style={{ flexDirection: 'row', marginTop: 16, gap: 12 }}>
-          <TouchableOpacity style={[styles.btnSecondary, { flex: 1 }]}><Text style={styles.btnSecondaryText}>Settings</Text></TouchableOpacity>
-          <TouchableOpacity style={[styles.btnSecondary, { flex: 1 }]}><Text style={styles.btnSecondaryText}>Connect</Text></TouchableOpacity>
-        </View>
-      </View>
-    ))}
-  </ScrollView>
-);
+      ))}
+    </ScrollView>
+  );
+};
 
 const LiveScreen = () => {
   const [permission, requestPermission] = useCameraPermissions();
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isPublicMeshShared, setIsPublicMeshShared] = useState(false);
 
   if (!permission) {
     return <View />;
@@ -153,9 +172,9 @@ const LiveScreen = () => {
   if (!permission.granted) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <Text style={{ textAlign: 'center', marginBottom: 16 }}>We need your permission to show the camera</Text>
+        <Text style={{ textAlign: 'center', marginBottom: 16 }}>We need camera permission to share optical feed</Text>
         <TouchableOpacity style={styles.btnPrimary} onPress={requestPermission}>
-          <Text style={styles.btnPrimaryText}>Grant Permission</Text>
+          <Text style={styles.btnPrimaryText}>Grant Camera Permission</Text>
         </TouchableOpacity>
       </View>
     );
@@ -164,31 +183,51 @@ const LiveScreen = () => {
   return (
     <View style={{ flex: 1 }}>
       <View style={{ padding: 24, paddingBottom: 0 }}>
-        <Text style={styles.pageTitle}>Live Detection</Text>
-        <Text style={styles.pageSubtitle}>Phone Test Camera Mode</Text>
+        <Text style={styles.pageTitle}>Android Camera Endpoint</Text>
+        <Text style={styles.pageSubtitle}>Stream as Optical Device on OptiCore Mesh</Text>
       </View>
-      <View style={{ flex: 1, margin: 24, borderRadius: 16, overflow: 'hidden', backgroundColor: '#000' }}>
+
+      <View style={{ flex: 1, margin: 24, borderRadius: 16, overflow: 'hidden', backgroundColor: '#000', position: 'relative' }}>
         {isStreaming ? (
           <CameraView style={{ flex: 1 }} facing="back">
-            <View style={{ position: 'absolute', top: 16, right: 16, backgroundColor: 'rgba(0,0,0,0.5)', padding: 8, borderRadius: 8 }}>
-              <Text style={{ color: '#fff', fontSize: 12 }}>FPS: 30 | SOURCE: PHONE</Text>
+            <View style={{ position: 'absolute', top: 16, right: 16, backgroundColor: 'rgba(0,0,0,0.65)', padding: 8, borderRadius: 8 }}>
+              <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600' }}>
+                {isPublicMeshShared ? 'MESH: PUBLIC OPTICAL ENDPOINT' : 'LOCAL PREVIEW'}
+              </Text>
             </View>
           </CameraView>
         ) : (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-            <Text style={{ color: '#666', marginBottom: 16 }}>Camera is stopped</Text>
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+            <Text style={{ color: '#aaa', fontSize: 14, textAlign: 'center', marginBottom: 8 }}>
+              Camera is currently offline
+            </Text>
+            <Text style={{ color: '#666', fontSize: 12, textAlign: 'center' }}>
+              Start your camera to enable publishing as an Optical Endpoint for remote AI Vision inference.
+            </Text>
           </View>
         )}
       </View>
-      <View style={{ padding: 24, paddingTop: 0 }}>
+
+      <View style={{ padding: 24, paddingTop: 0, gap: 10 }}>
         <TouchableOpacity 
           style={[styles.btnPrimary, isStreaming ? { backgroundColor: theme.error } : { backgroundColor: theme.primary }]}
           onPress={() => setIsStreaming(!isStreaming)}
         >
           <Text style={{ color: '#fff', textAlign: 'center', fontWeight: 'bold' }}>
-            {isStreaming ? 'Stop Streaming' : 'Start Phone Camera'}
+            {isStreaming ? 'Stop Camera' : 'Start Camera Feed'}
           </Text>
         </TouchableOpacity>
+
+        {isStreaming && (
+          <TouchableOpacity 
+            style={[styles.btnSecondary, { borderColor: isPublicMeshShared ? theme.success : theme.border }]}
+            onPress={() => setIsPublicMeshShared(!isPublicMeshShared)}
+          >
+            <Text style={{ color: isPublicMeshShared ? theme.success : theme.textDark, textAlign: 'center', fontWeight: '600' }}>
+              {isPublicMeshShared ? '✓ Public Optical Access Active (Auto-Approve)' : '📡 Make Camera Public on Sonar Mesh'}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );

@@ -36,9 +36,13 @@ class Settings(BaseSettings):
     enable_wifi_discovery: bool = True
     enable_webrtc: bool = True
 
+    # Remote Tunnel
+    ngrok_authtoken: Optional[str] = None
+
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"
 
 
 settings = Settings()
