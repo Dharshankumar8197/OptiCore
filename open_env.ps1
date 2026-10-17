@@ -11,7 +11,10 @@ param(
     [string]$Target = "all"
 )
 
-$rootDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$rootDir = $PSScriptRoot
+if ([string]::IsNullOrEmpty($rootDir) -and $MyInvocation.MyCommand -and $MyInvocation.MyCommand.Path) {
+    $rootDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+}
 if ([string]::IsNullOrEmpty($rootDir)) { $rootDir = (Get-Location).Path }
 
 Write-Host "===========================================================" -ForegroundColor Cyan

@@ -47,19 +47,28 @@ try {
 } catch {}
 
 if (-not $pullSuccess) {
-    $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-    if ([string]::IsNullOrEmpty($scriptDir)) { $scriptDir = (Get-Location).Path }
+    $scriptDir = $PSScriptRoot
+    if ([string]::IsNullOrEmpty($scriptDir) -and $MyInvocation.MyCommand -and $MyInvocation.MyCommand.Path) {
+        $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+    }
+    if ([string]::IsNullOrEmpty($scriptDir)) {
+        $scriptDir = (Get-Location).Path
+    }
+
     $dockerfile = Join-Path $scriptDir "backend\Dockerfile.standalone"
     $backendDir = Join-Path $scriptDir "backend"
 
     if (Test-Path $dockerfile) {
-        Write-Host "[*] Building locally from $dockerfile..." -ForegroundColor Yellow
-        docker build -f $dockerfile -t $ImageName $backendDir
+        Write-Host "[*] Building container locally from $dockerfile..." -ForegroundColor Yellow
+        Write-Host "    (Streaming live pip & PyTorch download progress below)" -ForegroundColor Gray
+        docker build --progress=plain -f $dockerfile -t $ImageName $backendDir
     } else {
         Write-Host "[*] Cloning OptiCore repository to build Docker container..." -ForegroundColor Yellow
         $tempBuildDir = Join-Path $env:TEMP "opticore_build_$(Get-Random)"
         git clone --depth 1 https://github.com/Dharshankumar8197/OptiCore.git $tempBuildDir
-        docker build -f "$tempBuildDir/backend/Dockerfile.standalone" -t $ImageName "$tempBuildDir/backend"
+        Write-Host "[*] Building container from clone..." -ForegroundColor Yellow
+        Write-Host "    (Streaming live pip & PyTorch download progress below)" -ForegroundColor Gray
+        docker build --progress=plain -f "$tempBuildDir/backend/Dockerfile.standalone" -t $ImageName "$tempBuildDir/backend"
         Remove-Item -Recurse -Force $tempBuildDir -ErrorAction SilentlyContinue
     }
 }
@@ -79,11 +88,34 @@ Write-Host "[*] Resolving Ngrok public HTTPS tunnel..." -ForegroundColor Cyan
 
 $publicUrl = ""
 for ($i = 0; $i -lt 30; $i++) {
+    $percent = [math]::Round((($i + 1) / 30) * 100)
+    $filled = [math]::Round((($i + 1) / 30) * 20)
+    $empty = 20 - $filled
+    $bar = ("#" * $filled) + ("." * $empty)
+    Write-Host -NoNewline "`r   [$bar] $percent% Checking tunnel endpoint..." -ForegroundColor Yellow
+
     Start-Sleep -Seconds 1
     try {
         $publicUrl = docker exec $ContainerName cat /app/data/ngrok_url.txt 2>$null
         if (-not [string]::IsNullOrWhiteSpace($publicUrl)) { break }
     } catch {}
+
+    try {
+        $tunnelData = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels" -ErrorAction SilentlyContinue
+        if ($tunnelData -and $tunnelData.tunnels) {
+            $httpsTunnel = $tunnelData.tunnels | Where-Object { $_.public_url -like "https:*" } | Select-Object -First 1
+            if ($httpsTunnel -and $httpsTunnel.public_url) {
+                $publicUrl = $httpsTunnel.public_url
+                break
+            }
+        }
+    } catch {}
+}
+
+if (-not [string]::IsNullOrWhiteSpace($publicUrl)) {
+    Write-Host "`r   [####################] 100% Tunnel resolved successfully!        " -ForegroundColor Green
+} else {
+    Write-Host "`r   [####################] 100% Local mode ready.                    " -ForegroundColor Gray
 }
 
 Write-Host "`n===========================================================" -ForegroundColor Green

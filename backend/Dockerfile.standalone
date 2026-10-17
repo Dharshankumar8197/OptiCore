@@ -32,12 +32,12 @@ RUN ARCH=$(uname -m) && \
     ngrok --version
 
 # Install PyTorch CPU first (clean and lightweight)
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
+RUN pip install --no-cache-dir --progress-bar on --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir --progress-bar on torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
 # Copy requirements and install dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --progress-bar on -r requirements.txt
 
 # Copy source code and model weights
 COPY . .

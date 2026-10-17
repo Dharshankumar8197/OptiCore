@@ -69,12 +69,12 @@ if ! docker pull "$IMAGE_NAME" 2>/dev/null; then
     echo -e "${YELLOW}[*] Pre-built image not yet published to GHCR. Building locally from source...${NC}"
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     if [ -d "$SCRIPT_DIR/backend" ]; then
-        docker build -f "$SCRIPT_DIR/backend/Dockerfile.standalone" -t "$IMAGE_NAME" "$SCRIPT_DIR/backend"
+        docker build --progress=plain -f "$SCRIPT_DIR/backend/Dockerfile.standalone" -t "$IMAGE_NAME" "$SCRIPT_DIR/backend"
     else
         # Clone minimal repo if curling standalone
         TEMP_DIR=$(mktemp -d)
         git clone --depth 1 https://github.com/Dharshankumar8197/OptiCore.git "$TEMP_DIR"
-        docker build -f "$TEMP_DIR/backend/Dockerfile.standalone" -t "$IMAGE_NAME" "$TEMP_DIR/backend"
+        docker build --progress=plain -f "$TEMP_DIR/backend/Dockerfile.standalone" -t "$IMAGE_NAME" "$TEMP_DIR/backend"
         rm -rf "$TEMP_DIR"
     fi
 fi
