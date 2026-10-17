@@ -4,7 +4,8 @@
  * Types mirror the backend Pydantic schemas exactly (field names, optionals).
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+const rawApiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+const API_BASE = rawApiBase.replace(/\/+$/, '');
 
 // ── Response types ────────────────────────────────────────────────────────────
 

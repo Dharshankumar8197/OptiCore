@@ -10,7 +10,12 @@ import { ModelPage, ModelPageSystemState } from '@/components/pages/ModelPage';
 import { ConnectivityPage, ConnectivitySystemState } from '@/components/pages/ConnectivityPage';
 import { apiClient } from '@/lib/api';
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8000';
+const rawWsUrl = process.env.NEXT_PUBLIC_WS_URL ?? (
+  process.env.NEXT_PUBLIC_API_URL
+    ? process.env.NEXT_PUBLIC_API_URL.replace(/^http/, 'ws')
+    : 'ws://localhost:8000'
+);
+const WS_URL = rawWsUrl.replace(/\/+$/, '');
 
 /* ── Full system state ─────────────────────────────────────────────────── */
 interface SystemState {

@@ -39,6 +39,20 @@ docker run -d \
 
 ---
 
+## 🚀 Deploy Web App to Vercel
+
+The Vision Studio web app is built with **Next.js 16** and deploys to **Vercel** seamlessly:
+
+1. Go to [Vercel](https://vercel.com/new) and import your repository: `https://github.com/Dharshankumar8197/OptiCore`
+2. In Project Settings, set **Root Directory** to: `web`
+3. Add Environment Variable:
+   * **`NEXT_PUBLIC_API_URL`**: Your backend URL (e.g. your Ngrok HTTPS tunnel URL)
+4. Click **Deploy**!
+
+*(See [VERCEL_DEPLOYMENT.md](VERCEL_DEPLOYMENT.md) for full walkthrough and CLI commands).*
+
+---
+
 ## 💾 Zero-Config SQLite Database
 
 **No external database server installation required!**
