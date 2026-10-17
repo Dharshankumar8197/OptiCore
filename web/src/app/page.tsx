@@ -55,7 +55,7 @@ const DEFAULT: SystemState = {
   cameraConnected: false,
   inferenceRunning: false,
   fps: null, latency: null, detectionCount: null,
-  confidence: 0.50, iou: 0.45, imageSize: 640,
+  confidence: 0.35, iou: 0.45, imageSize: 640,
   cpu: null, ram: null,
   wifiConnected: false, wifiSsid: null, wifiIp: null, wifiInterface: null, wifiSignalDbm: null,
   bluetoothAdapterAvailable: false, usbDeviceCount: 0,
@@ -109,16 +109,17 @@ export default function OptiCoreApp() {
         ...prev,
         backendOnline: health.status === 'ok',
         modelLoaded:   health.model_loaded,
-        cameraConnected: cams.cameras.some(c => c.status === 'connected'),
+        cameraConnected: cams.cameras.some(c => c.status === 'connected') || prev.cameraConnected,
       }));
     } catch {
-      setState(prev => ({ ...prev, backendOnline: false }));
+      setState(prev => ({ ...prev, backendOnline: prev.inferenceRunning ? true : false }));
     }
 
     try {
       const status = await apiClient.getSystemStatus();
       setState(prev => ({
         ...prev,
+        backendOnline: true,
         cpu:  status.cpu?.percent ?? null,
         ram:  status.memory?.percent ?? null,
         wifiConnected:             status.wifi_connected,
@@ -148,7 +149,9 @@ export default function OptiCoreApp() {
     const connect = () => {
       try {
         ws = new WebSocket(`${WS_URL}/ws/inference`);
-        ws.onopen  = () => {};
+        ws.onopen  = () => {
+          setState(prev => ({ ...prev, backendOnline: true }));
+        };
         ws.onclose = () => { retry = setTimeout(connect, 5000); };
         ws.onerror = () => ws?.close();
         ws.onmessage = (ev) => {
@@ -161,7 +164,10 @@ export default function OptiCoreApp() {
             }
             setState(prev => ({
               ...prev,
+              backendOnline: true,
+              modelLoaded: true,
               inferenceRunning: msg.running ?? prev.inferenceRunning,
+              cameraConnected: (msg.running || prev.cameraConnected),
               fps:              msg.fps             ?? prev.fps,
               latency:          msg.latency         ?? prev.latency,
               detectionCount:   msg.detection_count ?? prev.detectionCount,
@@ -262,6 +268,9 @@ export default function OptiCoreApp() {
                   state={modelState}
                   modelLoadedRef={modelLoadedRef}
                   preSelectedCameraId={preSelectedCamera}
+                  onCameraChange={(active) =>
+                    setState(prev => ({ ...prev, cameraConnected: active }))
+                  }
                   onConfigChange={(field, value) =>
                     setState(prev => ({
                       ...prev,

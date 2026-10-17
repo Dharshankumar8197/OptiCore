@@ -112,18 +112,27 @@ def _get_wifi_info() -> dict:
 
 
 def _get_usb_device_count() -> int:
-    """Count USB-connected devices via OpenCV probe (indices 0-4)."""
+    """Count USB-connected devices safely without invoking OpenCV VideoCapture."""
     try:
-        import cv2  # type: ignore
-        count = 0
-        for idx in range(5):
-            cap = cv2.VideoCapture(idx)
-            if cap.isOpened():
-                count += 1
-                cap.release()
-        return count
+        system = platform.system()
+        if system == "Linux":
+            usb_sys = "/sys/bus/usb/devices"
+            if os.path.exists(usb_sys):
+                devs = [d for d in os.listdir(usb_sys) if ":" not in d and not d.startswith("usb")]
+                if devs:
+                    return len(devs)
+            import glob
+            return len(glob.glob("/dev/video*"))
+        elif system == "Windows":
+            out = subprocess.check_output(
+                ["powershell", "-Command",
+                 "Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue | Where-Object { $_.InstanceId -like 'USB*' } | Measure-Object | Select-Object -ExpandProperty Count"],
+                timeout=3, stderr=subprocess.DEVNULL
+            ).decode().strip()
+            return int(out) if out.isdigit() else 0
     except Exception:
-        return 0
+        pass
+    return 0
 
 
 def _get_bluetooth_adapter_available() -> bool:
@@ -159,11 +168,31 @@ def _get_bluetooth_adapter_available() -> bool:
 
 
 def _enumerate_cameras() -> list:
-    """Probe VideoCapture indices 0-4 to discover real cameras."""
+    """Probe VideoCapture indices safely to discover real hardware cameras without logging errors."""
     cameras = []
     try:
+        system = platform.system()
+        # In Linux/Docker, check if /dev/video* devices exist before calling OpenCV
+        if system == "Linux":
+            import glob
+            dev_nodes = sorted(glob.glob("/dev/video*"))
+            if not dev_nodes:
+                return []
+            indices_to_check = []
+            for node in dev_nodes:
+                num = "".join(filter(str.isdigit, os.path.basename(node)))
+                if num.isdigit():
+                    indices_to_check.append(int(num))
+        else:
+            indices_to_check = [0, 1]
+
         import cv2  # type: ignore
-        for index in range(5):
+        try:
+            cv2.setLogLevel(0)  # Silence OpenCV C++ driver loggers
+        except Exception:
+            pass
+
+        for index in indices_to_check:
             cap = cv2.VideoCapture(index)
             if not cap.isOpened():
                 cap.release()
@@ -193,7 +222,7 @@ def _enumerate_cameras() -> list:
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
-@router.get("/health")
+@router.api_route("/health", methods=["GET", "HEAD"])
 def health_check(db: Session = Depends(get_db)):
     """Health check endpoint."""
     try:

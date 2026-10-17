@@ -13,30 +13,43 @@ import {
   ModelClassesResponse,
 } from '@/lib/api';
 
-/* ── Sample Test Presets (embedded SVG data URIs for 1-click testing) ───── */
+/* ── Sample Test Presets (photorealistic obstacles & hazard scenes) ──────── */
 const PRESET_IMAGES = [
   {
-    id: 'preset_workspace',
-    name: 'Tech Desk',
-    category: 'Indoor Objects',
-    description: 'Laptop, smartphone, coffee cup, desk items',
-    url: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500"><rect width="800" height="500" fill="%23121520"/><rect x="40" y="320" width="720" height="150" rx="8" fill="%23222638"/><rect x="180" y="160" width="300" height="180" rx="6" fill="%232D324A" stroke="%236FA8FF" stroke-width="2"/><rect x="195" y="175" width="270" height="145" rx="3" fill="%230F1322"/><rect x="150" y="340" width="360" height="15" rx="4" fill="%233A415E"/><rect x="540" y="270" width="60" height="100" rx="8" fill="%231E2336" stroke="%239B8AFB" stroke-width="2"/><circle x="670" y="320" cx="670" cy="320" r="30" fill="%234A3E30" stroke="%23FFD166" stroke-width="2"/><text x="400" y="80" fill="%23F5F7FA" font-family="sans-serif" font-size="22" font-weight="600" text-anchor="middle">OPTICORE TEST ENVIRONMENT · TECH DESK</text><text x="400" y="110" fill="%239AA2AE" font-family="sans-serif" font-size="12" text-anchor="middle">Objects: Laptop, Smartphone, Cup</text></svg>',
+    id: 'preset_indoor',
+    name: 'Indoor Hallway',
+    category: 'Obstacles & Stairs',
+    description: 'Doors, staircases, and hallway obstacles',
+    url: '/presets/indoor.jpg',
   },
   {
-    id: 'preset_street',
-    name: 'Urban Avenue',
-    category: 'Pedestrians & Vehicles',
-    description: 'Person walking, bicycle, vehicle',
-    url: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500"><rect width="800" height="500" fill="%230E121B"/><rect x="0" y="300" width="800" height="200" fill="%231C2130"/><line x1="0" y1="400" x2="800" y2="400" stroke="%23FFD166" stroke-dasharray="20,20" stroke-width="4"/><circle cx="240" cy="200" r="28" fill="%23E8A87C"/><rect x="215" y="230" width="50" height="120" rx="6" fill="%239B8AFB"/><line x1="225" y1="350" x2="220" y2="440" stroke="%23334155" stroke-width="12"/><line x1="255" y1="350" x2="260" y2="440" stroke="%23334155" stroke-width="12"/><rect x="420" y="280" width="280" height="90" rx="14" fill="%235CE1E6"/><circle cx="480" cy="370" r="24" fill="%230B0F17"/><circle cx="640" cy="370" r="24" fill="%230B0F17"/><text x="400" y="70" fill="%23F5F7FA" font-family="sans-serif" font-size="22" font-weight="600" text-anchor="middle">OPTICORE TEST ENVIRONMENT · URBAN SCENE</text><text x="400" y="100" fill="%239AA2AE" font-family="sans-serif" font-size="12" text-anchor="middle">Objects: Person, Car</text></svg>',
+    id: 'preset_urban',
+    name: 'Urban Street',
+    category: 'Pedestrians & Hazards',
+    description: 'Waste container obstacle, traffic light, pedestrians',
+    url: '/presets/urban.jpg',
   },
   {
-    id: 'preset_traffic',
-    name: 'Road Junction',
-    category: 'Vehicles',
-    description: 'Bus, car, traffic light',
-    url: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500"><rect width="800" height="500" fill="%230B0D16"/><rect x="0" y="240" width="800" height="260" fill="%23181C28"/><rect x="140" y="190" width="340" height="150" rx="10" fill="%23FF85A2"/><circle cx="210" cy="340" r="25" fill="%2307090E"/><circle cx="410" cy="340" r="25" fill="%2307090E"/><rect x="580" y="120" width="40" height="110" rx="8" fill="%2322273A"/><circle cx="600" cy="145" r="10" fill="%23E47D87"/><circle cx="600" cy="175" r="10" fill="%23FFD166"/><circle cx="600" cy="205" r="10" fill="%2372D6A3"/><text x="400" y="60" fill="%23F5F7FA" font-family="sans-serif" font-size="22" font-weight="600" text-anchor="middle">OPTICORE TEST ENVIRONMENT · TRAFFIC JUNCTION</text><text x="400" y="90" fill="%239AA2AE" font-family="sans-serif" font-size="12" text-anchor="middle">Objects: Bus, Traffic Light</text></svg>',
+    id: 'preset_sidewalk',
+    name: 'Sidewalk Hazards',
+    category: 'Ground & Furniture',
+    description: 'Park bench obstacle, pothole hazard, curb',
+    url: '/presets/street_hazards.jpg',
   },
 ];
+
+/* Helper to convert URL/preset to base64 Data URL */
+async function resolveImageBase64(url: string): Promise<string> {
+  if (url.startsWith('data:')) return url;
+  const res = await fetch(url);
+  const blob = await res.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
 
 /* ── Types passed from shell ─────────────────────────────────────────────── */
 export interface ModelPageSystemState {
@@ -54,6 +67,7 @@ interface ModelPageProps {
   modelLoadedRef: React.MutableRefObject<boolean>;
   onConfigChange?: (field: 'confidence' | 'iou' | 'imageSize', value: number) => void;
   preSelectedCameraId?: string | null;
+  onCameraChange?: (active: boolean) => void;
 }
 
 type TestTab = 'live' | 'upload' | 'presets';
@@ -244,6 +258,7 @@ export function ModelPage({
   modelLoadedRef,
   onConfigChange,
   preSelectedCameraId,
+  onCameraChange,
 }: ModelPageProps) {
   const viewportRef = useRef<CameraViewportRef>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -332,8 +347,8 @@ export function ModelPage({
       let b64: string | null = null;
       if (activeTab === 'live') {
         b64 = viewportRef.current?.captureFrame() ?? null;
-      } else {
-        b64 = uploadedImageUrl;
+      } else if (uploadedImageUrl) {
+        b64 = await resolveImageBase64(uploadedImageUrl);
       }
 
       if (!b64) {
@@ -453,39 +468,48 @@ export function ModelPage({
   };
 
   /* Select preset */
-  const handleSelectPreset = (preset: (typeof PRESET_IMAGES)[0]) => {
+  const handleSelectPreset = async (preset: (typeof PRESET_IMAGES)[0]) => {
     setUploadedImageUrl(preset.url);
     setActiveTab('presets');
     setDetections([]);
+    setIsInferring(true);
 
-    apiClient
-      .detectBase64({
-        image_base64: preset.url,
-        confidence_threshold: modelConfig?.confidence_threshold ?? state.confidence,
+    try {
+      const b64 = await resolveImageBase64(preset.url);
+      const conf = Math.min(modelConfig?.confidence_threshold ?? state.confidence, 0.35);
+
+      const res = await apiClient.detectBase64({
+        image_base64: b64,
+        confidence_threshold: conf,
         iou_threshold: modelConfig?.iou_threshold ?? state.iou,
-      })
-      .then((res) => {
-        const mapped: Detection[] = (res.detections || []).map((d) => ({
-          id: d.id,
-          label: d.class_name,
-          confidence: d.confidence,
-          x: d.normalized_box.x,
-          y: d.normalized_box.y,
-          width: d.normalized_box.width,
-          height: d.normalized_box.height,
-          class_id: d.class_id,
-          tracking_id: d.tracking_id,
-        }));
-        setDetections(mapped);
-        setTimingBreakdown({
-          pre: res.preprocess_ms,
-          infer: res.inference_time_ms,
-          post: res.postprocess_ms,
-          total: res.total_time_ms,
-        });
-        setLastRawJson(res);
-      })
-      .catch(() => {});
+      });
+
+      const mapped: Detection[] = (res.detections || []).map((d) => ({
+        id: d.id,
+        label: d.class_name,
+        confidence: d.confidence,
+        x: d.normalized_box.x,
+        y: d.normalized_box.y,
+        width: d.normalized_box.width,
+        height: d.normalized_box.height,
+        class_id: d.class_id,
+        tracking_id: d.tracking_id,
+      }));
+      setDetections(mapped);
+      setLiveLatency(res.total_time_ms);
+      setLiveFps(res.total_time_ms > 0 ? +(1000 / res.total_time_ms).toFixed(1) : 60);
+      setTimingBreakdown({
+        pre: res.preprocess_ms,
+        infer: res.inference_time_ms,
+        post: res.postprocess_ms,
+        total: res.total_time_ms,
+      });
+      setLastRawJson(res);
+    } catch (err) {
+      console.error('Preset detection error:', err);
+    } finally {
+      setIsInferring(false);
+    }
   };
 
   /* Copy raw JSON */
@@ -659,6 +683,7 @@ export function ModelPage({
             isScanning={continuousScan || isInferring}
             selectedDetectionId={selectedDetectionId}
             onSelectDetection={setSelectedDetectionId}
+            onCameraReady={onCameraChange}
             resolution={
               activeTab === 'live'
                 ? cameras.find((c) => c.id === selectedCamera)?.resolution ?? '1280x720'

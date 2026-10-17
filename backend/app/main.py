@@ -22,10 +22,10 @@ app = FastAPI(
     description="AI-powered vision control platform",
 )
 
-# Add CORS middleware (supporting localhost, mobile devices, LAN IPs, and ngrok tunnels)
+# Add CORS middleware (supporting localhost, Vercel, mobile devices, LAN IPs, and ngrok tunnels)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origin_regex=r"^https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -43,7 +43,7 @@ def read_root():
     }
 
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 def health():
     """Health check endpoint for frontend status polling."""
     from app.inference import is_model_loaded

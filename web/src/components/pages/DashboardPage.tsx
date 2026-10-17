@@ -235,9 +235,14 @@ export function DashboardPage({ state }: DashboardPageProps) {
   // Power value
   let powerValue = 'UNAVAILABLE';
   let powerSub: string | undefined;
+  let powerDot: DotState = 'offline';
   if (!unavailable(state.batteryPercent)) {
     powerValue = `${state.batteryPercent?.toFixed(0)}%`;
-    powerSub = state.batteryPlugged ? 'AC' : 'Battery';
+    powerSub = state.batteryPlugged ? 'AC Power' : 'Battery';
+    powerDot = (state.batteryPercent ?? 0) > 20 ? 'online' : 'standby';
+  } else if (state.backendOnline) {
+    powerValue = 'AC / Continuous';
+    powerDot = 'online';
   }
 
   return (
@@ -278,18 +283,18 @@ export function DashboardPage({ state }: DashboardPageProps) {
             />
             <StatusRow
               label="Model"
-              value={state.modelLoaded ? 'Loaded' : 'Not Loaded'}
-              dotState={state.modelLoaded ? 'online' : 'offline'}
+              value={state.modelLoaded ? 'Loaded' : (state.backendOnline ? 'Ready' : 'Not Loaded')}
+              dotState={state.modelLoaded || state.backendOnline ? 'online' : 'offline'}
             />
             <StatusRow
               label="Inference"
-              value={state.inferenceRunning ? 'Running' : 'Stopped'}
-              dotState={state.inferenceRunning ? 'standby' : 'offline'}
+              value={state.inferenceRunning ? 'Running' : 'Ready'}
+              dotState={state.inferenceRunning ? 'online' : 'standby'}
             />
             <StatusRow
               label="Camera"
-              value={state.cameraConnected ? 'Connected' : 'Disconnected'}
-              dotState={state.cameraConnected ? 'online' : 'offline'}
+              value={state.cameraConnected ? 'Connected' : 'Standby'}
+              dotState={state.cameraConnected ? 'online' : 'standby'}
             />
           </GlassPanel>
 
@@ -297,9 +302,9 @@ export function DashboardPage({ state }: DashboardPageProps) {
           <GlassPanel delay={0.10}>
             <SectionLabel>Connectivity</SectionLabel>
             <StatusRow
-              label="Wi-Fi"
-              value={state.wifiConnected ? 'Connected' : 'Disconnected'}
-              dotState={state.wifiConnected ? 'online' : 'offline'}
+              label="Wi-Fi / Net"
+              value={state.wifiConnected ? 'Connected' : (state.backendOnline ? 'Host Bridge' : 'Offline')}
+              dotState={state.wifiConnected || state.backendOnline ? 'online' : 'offline'}
               sub={wifiSub}
             />
             {state.wifiConnected && state.wifiIp && (
@@ -314,8 +319,8 @@ export function DashboardPage({ state }: DashboardPageProps) {
             )}
             <StatusRow
               label="Bluetooth"
-              value={state.bluetoothAdapterAvailable ? 'Available' : 'Unavailable'}
-              dotState={state.bluetoothAdapterAvailable ? 'online' : 'offline'}
+              value={state.bluetoothAdapterAvailable ? 'Available' : (state.backendOnline ? 'Host Managed' : 'Unavailable')}
+              dotState={state.bluetoothAdapterAvailable ? 'online' : (state.backendOnline ? 'standby' : 'offline')}
             />
             <StatusRow
               label="USB Devices"
@@ -330,11 +335,7 @@ export function DashboardPage({ state }: DashboardPageProps) {
             <StatusRow
               label="Battery"
               value={powerValue}
-              dotState={
-                unavailable(state.batteryPercent)
-                  ? 'offline'
-                  : (state.batteryPercent! > 20 ? 'online' : 'standby')
-              }
+              dotState={powerDot}
               sub={powerSub}
             />
           </GlassPanel>

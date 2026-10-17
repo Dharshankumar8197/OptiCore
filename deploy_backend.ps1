@@ -227,13 +227,21 @@ if (-not [string]::IsNullOrWhiteSpace($publicUrl)) {
     Write-Host "   Swagger Docs:  http://localhost:$Port/docs" -ForegroundColor Cyan
     Write-Host "Running in local-only mode (no Ngrok token provided)." -ForegroundColor Yellow
 }
+# Auto-generate convenient shortcut scripts in $HOME
+try {
+    Set-Content -Path (Join-Path $HOME "env.ps1") -Value "notepad `"$activeEnvFile`"" -Force
+    Set-Content -Path (Join-Path $HOME "logs.ps1") -Value "docker logs -f $ContainerName" -Force
+    Set-Content -Path (Join-Path $HOME "start.ps1") -Value "irm https://raw.githubusercontent.com/Dharshankumar8197/OptiCore/main/start_backend.ps1 | iex" -Force
+} catch {}
+
 Write-Host "===========================================================" -ForegroundColor Green
 Write-Host "Configuration file: $activeEnvFile" -ForegroundColor Cyan
-Write-Host "To edit .env anytime from PowerShell:" -ForegroundColor Yellow
-Write-Host "   notepad `"$activeEnvFile`"" -ForegroundColor White
-Write-Host "   Or: irm https://raw.githubusercontent.com/Dharshankumar8197/OptiCore/main/open_env.ps1 | iex" -ForegroundColor White
+Write-Host "Quick commands (from this terminal):" -ForegroundColor Yellow
+Write-Host "   .\env.ps1    - View/Edit .env configuration" -ForegroundColor White
+Write-Host "   .\start.ps1  - Resume backend in 1 second" -ForegroundColor White
+Write-Host "   .\logs.ps1   - Follow live inference logs" -ForegroundColor White
+Write-Host "Or from anywhere: irm https://raw.githubusercontent.com/Dharshankumar8197/OptiCore/main/open_env.ps1 | iex" -ForegroundColor Gray
 Write-Host "===========================================================" -ForegroundColor Green
-Write-Host "View container logs anytime with: docker logs -f $ContainerName" -ForegroundColor Cyan
 Write-Host "[*] Launching live logs monitor in a dedicated PowerShell window..." -ForegroundColor Cyan
 Start-Process powershell.exe -ArgumentList "-NoExit", "-Command", "`$Host.UI.RawUI.WindowTitle = 'OptiCore Backend Logs'; Write-Host '===========================================================' -ForegroundColor Cyan; Write-Host '   OptiCore Backend Live Logs Stream (Ctrl+C to stop)      ' -ForegroundColor Cyan; Write-Host '===========================================================' -ForegroundColor Cyan; docker logs -f $ContainerName"
 Write-Host ""

@@ -165,13 +165,18 @@ async function apiFetch<T>(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
+    const headers: Record<string, string> = {};
+    if (options?.body && !(options.body instanceof FormData)) {
+      headers['Content-Type'] = 'application/json';
+    }
+    if (options?.headers) {
+      Object.assign(headers, options.headers);
+    }
+
     const res = await fetch(`${API_BASE}${path}`, {
       ...options,
       signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(options?.headers ?? {}),
-      },
+      headers,
     });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
