@@ -6,12 +6,43 @@
 
 param(
     [string]$Authtoken = $env:NGROK_AUTHTOKEN,
-    [int]$Port = 8000
+    [int]$Port = 8000,
+    [switch]$EditEnv
 )
 
 Write-Host "===========================================================" -ForegroundColor Cyan
-Write-Host "   🚀 OptiCore AI Vision Backend — Remote Docker Deploy     " -ForegroundColor Cyan
+Write-Host "   OptiCore AI Vision Backend - Remote Docker Deploy       " -ForegroundColor Cyan
 Write-Host "===========================================================" -ForegroundColor Cyan
+
+# 1. Determine persistent configuration directory
+$opticoreHome = Join-Path $HOME ".opticore"
+if (-not (Test-Path $opticoreHome)) {
+    New-Item -ItemType Directory -Path $opticoreHome -Force | Out-Null
+}
+
+$scriptDir = $PSScriptRoot
+if ([string]::IsNullOrEmpty($scriptDir) -and $MyInvocation.MyCommand -and $MyInvocation.MyCommand.Path) {
+    $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+}
+if ([string]::IsNullOrEmpty($scriptDir)) {
+    $scriptDir = (Get-Location).Path
+}
+
+# Active .env resolution: prefer local backend\.env if in repo, else $HOME\.opticore\.env
+$activeEnvFile = Join-Path $opticoreHome ".env"
+$repoBackendEnv = Join-Path $scriptDir "backend\.env"
+if (Test-Path $repoBackendEnv) {
+    $activeEnvFile = $repoBackendEnv
+}
+
+# If user passed -EditEnv, open the .env and exit
+if ($EditEnv) {
+    $editor = "notepad.exe"
+    if (Get-Command code -ErrorAction SilentlyContinue) { $editor = "code" }
+    Write-Host "[*] Opening configuration: $activeEnvFile with $editor..." -ForegroundColor Cyan
+    Start-Process $editor "`"$activeEnvFile`""
+    exit 0
+}
 
 # Check for Docker
 try {
@@ -26,32 +57,20 @@ try {
     exit 1
 }
 
-# Resolve script directory safely
-$scriptDir = $PSScriptRoot
-if ([string]::IsNullOrEmpty($scriptDir) -and $MyInvocation.MyCommand -and $MyInvocation.MyCommand.Path) {
-    $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-}
-if ([string]::IsNullOrEmpty($scriptDir)) {
-    $scriptDir = (Get-Location).Path
-}
-
-# Auto-discover saved Ngrok token if not explicitly passed
+# Auto-discover saved Ngrok token from .env or cache files
 $tokenCacheFile = Join-Path $HOME ".opticore_ngrok_token"
 $localTokenFile = Join-Path $scriptDir ".ngrok_token"
-$backendEnvFile = Join-Path $scriptDir "backend\.env"
-$rootEnvFile = Join-Path $scriptDir ".env"
 
 if ([string]::IsNullOrWhiteSpace($Authtoken)) {
-    if (Test-Path $localTokenFile) {
+    if (Test-Path $activeEnvFile) {
+        $envMatch = Select-String -Path $activeEnvFile -Pattern "^NGROK_AUTHTOKEN=(.+)$" | Select-Object -First 1
+        if ($envMatch) { $Authtoken = $envMatch.Matches[0].Groups[1].Value.Trim() }
+    }
+    if ([string]::IsNullOrWhiteSpace($Authtoken) -and (Test-Path $localTokenFile)) {
         $Authtoken = (Get-Content $localTokenFile -Raw).Trim()
-    } elseif (Test-Path $tokenCacheFile) {
+    }
+    if ([string]::IsNullOrWhiteSpace($Authtoken) -and (Test-Path $tokenCacheFile)) {
         $Authtoken = (Get-Content $tokenCacheFile -Raw).Trim()
-    } elseif (Test-Path $backendEnvFile) {
-        $envMatch = Select-String -Path $backendEnvFile -Pattern "^NGROK_AUTHTOKEN=(.+)$" | Select-Object -First 1
-        if ($envMatch) { $Authtoken = $envMatch.Matches[0].Groups[1].Value.Trim() }
-    } elseif (Test-Path $rootEnvFile) {
-        $envMatch = Select-String -Path $rootEnvFile -Pattern "^NGROK_AUTHTOKEN=(.+)$" | Select-Object -First 1
-        if ($envMatch) { $Authtoken = $envMatch.Matches[0].Groups[1].Value.Trim() }
     }
 
     if (-not [string]::IsNullOrWhiteSpace($Authtoken)) {
@@ -59,19 +78,52 @@ if ([string]::IsNullOrWhiteSpace($Authtoken)) {
     }
 }
 
-# Prompt only if still not found, and save it permanently
+# Prompt only if token is still unknown
 if ([string]::IsNullOrWhiteSpace($Authtoken)) {
     Write-Host "[?] Enter your Ngrok Authtoken (get one free at https://dashboard.ngrok.com):" -ForegroundColor Yellow
     $Authtoken = Read-Host "Authtoken (press Enter to skip public tunnel)"
+}
 
-    if (-not [string]::IsNullOrWhiteSpace($Authtoken)) {
-        try {
-            Set-Content -Path $tokenCacheFile -Value $Authtoken -Force
-            if (Test-Path $scriptDir) { Set-Content -Path $localTokenFile -Value $Authtoken -Force }
-            Write-Host "[+] Saved Authtoken — you will never be asked again on this system!" -ForegroundColor Green
-        } catch {}
+# Ensure persistent .env file exists and has latest values
+if (-not (Test-Path $activeEnvFile)) {
+    $defaultEnv = @"
+# OptiCore Environment Configuration
+APP_NAME=OptiCore
+ENVIRONMENT=production
+HOST=0.0.0.0
+PORT=$Port
+
+# Ngrok Public HTTPS Tunnel
+NGROK_AUTHTOKEN=$Authtoken
+
+# AI Model Inference Settings
+MODEL_PATH=./models/best.pt
+CONFIDENCE_THRESHOLD=0.50
+IOU_THRESHOLD=0.45
+IMAGE_SIZE=640
+
+# Database
+DATABASE_URL=sqlite:///./data/opticore.db
+
+# Authentication
+JWT_SECRET_KEY=opticore-secret-key-$(Get-Random)-change-in-production
+JWT_ALGORITHM=HS256
+JWT_EXPIRATION_HOURS=24
+"@
+    Set-Content -Path $activeEnvFile -Value $defaultEnv -Force
+    Write-Host "[+] Saved configuration to $activeEnvFile" -ForegroundColor Green
+} elseif (-not [string]::IsNullOrWhiteSpace($Authtoken)) {
+    $content = Get-Content $activeEnvFile -Raw
+    if ($content -match "NGROK_AUTHTOKEN=") {
+        $content = $content -replace "NGROK_AUTHTOKEN=.*", "NGROK_AUTHTOKEN=$Authtoken"
+    } else {
+        $content += "`nNGROK_AUTHTOKEN=$Authtoken`n"
     }
-} else {
+    Set-Content -Path $activeEnvFile -Value $content.Trim() -Force
+}
+
+# Also cache token file
+if (-not [string]::IsNullOrWhiteSpace($Authtoken)) {
     try {
         Set-Content -Path $tokenCacheFile -Value $Authtoken -Force
         if (Test-Path $scriptDir) { Set-Content -Path $localTokenFile -Value $Authtoken -Force }
@@ -98,26 +150,28 @@ if (-not $pullSuccess) {
 
     if (Test-Path $dockerfile) {
         Write-Host "[*] Building container locally from $dockerfile..." -ForegroundColor Yellow
-        Write-Host "    (Streaming live pip & PyTorch download progress below)" -ForegroundColor Gray
+        Write-Host "    (Streaming live pip and PyTorch download progress below)" -ForegroundColor Gray
         docker build --progress=plain -f $dockerfile -t $ImageName $backendDir
     } else {
         Write-Host "[*] Cloning OptiCore repository to build Docker container..." -ForegroundColor Yellow
         $tempBuildDir = Join-Path $env:TEMP "opticore_build_$(Get-Random)"
         git clone --depth 1 https://github.com/Dharshankumar8197/OptiCore.git $tempBuildDir
         Write-Host "[*] Building container from clone..." -ForegroundColor Yellow
-        Write-Host "    (Streaming live pip & PyTorch download progress below)" -ForegroundColor Gray
+        Write-Host "    (Streaming live pip and PyTorch download progress below)" -ForegroundColor Gray
         docker build --progress=plain -f "$tempBuildDir/backend/Dockerfile.standalone" -t $ImageName "$tempBuildDir/backend"
         Remove-Item -Recurse -Force $tempBuildDir -ErrorAction SilentlyContinue
     }
 }
 
 Write-Host "[*] Starting OptiCore Backend container on port $Port..." -ForegroundColor Cyan
+Write-Host "    Loading environment variables from: $activeEnvFile" -ForegroundColor Gray
+
 docker run -d `
     --name $ContainerName `
     --restart unless-stopped `
     -p "${Port}:8000" `
     -p "4040:4040" `
-    -e NGROK_AUTHTOKEN="$Authtoken" `
+    --env-file "$activeEnvFile" `
     -v opticore_data:/app/data `
     $ImageName
 
@@ -156,22 +210,28 @@ if (-not [string]::IsNullOrWhiteSpace($publicUrl)) {
     Write-Host "`r   [####################] 100% Local mode ready.                    " -ForegroundColor Gray
 }
 
-Write-Host "`n===========================================================" -ForegroundColor Green
-Write-Host "   🎉 OPTICORE BACKEND SERVER IS LIVE AND ACCESSIBLE!     " -ForegroundColor Green
+Write-Host ""
 Write-Host "===========================================================" -ForegroundColor Green
-Write-Host "   📡 Local API:     http://localhost:$Port" -ForegroundColor Cyan
+Write-Host "   OPTICORE BACKEND SERVER IS LIVE AND ACCESSIBLE!         " -ForegroundColor Green
+Write-Host "===========================================================" -ForegroundColor Green
+Write-Host "   Local API:     http://localhost:$Port" -ForegroundColor Cyan
 if (-not [string]::IsNullOrWhiteSpace($publicUrl)) {
-    Write-Host "   🌍 Public HTTPS:  $publicUrl" -ForegroundColor Green
-    Write-Host "   📖 Swagger Docs:  $publicUrl/docs" -ForegroundColor Cyan
+    Write-Host "   Public HTTPS:  $publicUrl" -ForegroundColor Green
+    Write-Host "   Swagger Docs:  $publicUrl/docs" -ForegroundColor Cyan
     Write-Host "===========================================================" -ForegroundColor Green
-    Write-Host "👉 Set this in your Web App (.env.local) or Mobile App:" -ForegroundColor Yellow
+    Write-Host "Set this in Vercel or your Web App (.env.local):" -ForegroundColor Yellow
     Write-Host "   NEXT_PUBLIC_API_URL=$publicUrl" -ForegroundColor Green
     $wsUrl = $publicUrl -replace "https://", "wss://"
     Write-Host "   NEXT_PUBLIC_WS_URL=$wsUrl" -ForegroundColor Green
 } else {
-    Write-Host "   📖 Swagger Docs:  http://localhost:$Port/docs" -ForegroundColor Cyan
-    Write-Host "ℹ️  Running in local-only mode (no Ngrok token provided)." -ForegroundColor Yellow
+    Write-Host "   Swagger Docs:  http://localhost:$Port/docs" -ForegroundColor Cyan
+    Write-Host "Running in local-only mode (no Ngrok token provided)." -ForegroundColor Yellow
 }
+Write-Host "===========================================================" -ForegroundColor Green
+Write-Host "Configuration file: $activeEnvFile" -ForegroundColor Cyan
+Write-Host "To edit .env anytime from PowerShell:" -ForegroundColor Yellow
+Write-Host "   notepad `"$activeEnvFile`"" -ForegroundColor White
+Write-Host "   Or: irm https://raw.githubusercontent.com/Dharshankumar8197/OptiCore/main/open_env.ps1 | iex" -ForegroundColor White
 Write-Host "===========================================================" -ForegroundColor Green
 Write-Host "View container logs anytime with: docker logs -f $ContainerName" -ForegroundColor Cyan
 Write-Host "[*] Launching live logs monitor in a dedicated PowerShell window..." -ForegroundColor Cyan

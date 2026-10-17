@@ -78,15 +78,14 @@ Your Ngrok Authtoken is **automatically saved** on first entry, so you never hav
 Easily inspect and edit your environment variables directly from PowerShell:
 
 ```powershell
-# Open both Backend (.env) and Web (.env.local) in your editor (VS Code or Notepad)
+# In your local repository:
 .\env.ps1
 
-# Or open a specific target
-.\open_env.ps1 backend
-.\open_env.ps1 web
+# Or on ANY computer (even without cloning the repo):
+irm https://raw.githubusercontent.com/Dharshankumar8197/OptiCore/main/open_env.ps1 | iex
 ```
 
-If `.env` or `web/.env.local` does not exist, the script automatically generates them from templates.
+On any standalone system, persistent settings are stored in **`~/.opticore/.env`** and automatically injected into the Docker container via `--env-file`.
 
 ---
 

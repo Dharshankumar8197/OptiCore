@@ -95,13 +95,41 @@ if ! docker pull "$IMAGE_NAME" 2>/dev/null; then
     fi
 fi
 
+CONFIG_DIR="$HOME/.opticore"
+mkdir -p "$CONFIG_DIR"
+ENV_FILE="$CONFIG_DIR/.env"
+
+if [ ! -f "$ENV_FILE" ]; then
+    cat <<EOF > "$ENV_FILE"
+# OptiCore Environment Configuration
+APP_NAME=OptiCore
+ENVIRONMENT=production
+HOST=0.0.0.0
+PORT=$PORT
+NGROK_AUTHTOKEN=$NGROK_TOKEN
+MODEL_PATH=./models/best.pt
+CONFIDENCE_THRESHOLD=0.50
+IOU_THRESHOLD=0.45
+IMAGE_SIZE=640
+DATABASE_URL=sqlite:///./data/opticore.db
+JWT_SECRET_KEY=opticore-secret-production
+EOF
+elif [ -n "$NGROK_TOKEN" ]; then
+    if grep -q '^NGROK_AUTHTOKEN=' "$ENV_FILE"; then
+        sed -i "s/^NGROK_AUTHTOKEN=.*/NGROK_AUTHTOKEN=$NGROK_TOKEN/" "$ENV_FILE"
+    else
+        echo "NGROK_AUTHTOKEN=$NGROK_TOKEN" >> "$ENV_FILE"
+    fi
+fi
+
 echo -e "${CYAN}[*] Starting OptiCore Backend container...${NC}"
+echo -e "    Loading configuration from: ${GREEN}$ENV_FILE${NC}"
 docker run -d \
     --name "$CONTAINER_NAME" \
     --restart unless-stopped \
     -p "$PORT:8000" \
     -p 4040:4040 \
-    -e NGROK_AUTHTOKEN="$NGROK_TOKEN" \
+    --env-file "$ENV_FILE" \
     -v opticore_data:/app/data \
     "$IMAGE_NAME"
 
