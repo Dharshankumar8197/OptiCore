@@ -83,7 +83,23 @@ export const CameraViewport = forwardRef<CameraViewportRef, CameraViewportProps>
   const [availableDevices, setAvailableDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
   const [activeCameraLabel, setActiveCameraLabel] = useState<string>('');
+  const [liveResolution, setLiveResolution] = useState<string>('1280x720');
+  const [showDeviceMenu, setShowDeviceMenu] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  /* Close camera menu on outside click */
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowDeviceMenu(false);
+      }
+    };
+    if (showDeviceMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showDeviceMenu]);
 
   /* Cleanly stop all tracks of any active stream */
   const stopStream = useCallback(() => {
@@ -126,26 +142,73 @@ export const CameraViewport = forwardRef<CameraViewportRef, CameraViewportProps>
       // Stop previous stream
       stopStream();
 
-      const devId = deviceIdToUse !== undefined ? deviceIdToUse : selectedDeviceId;
+      // Brief delay to allow Windows Media Foundation driver to release hardware handle
+      await new Promise((r) => setTimeout(r, 180));
+
+      let devId = deviceIdToUse !== undefined ? deviceIdToUse : selectedDeviceId;
       const facing = facingToUse !== undefined ? facingToUse : facingMode;
 
-      try {
-        let newStream: MediaStream;
-        const constraints: MediaStreamConstraints = {
-          audio: false,
-          video: devId
-            ? { deviceId: { ideal: devId }, width: { ideal: 1280 }, height: { ideal: 720 } }
-            : { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 } },
-        };
-
+      // If no deviceId specified yet, check localStorage for previously preferred camera
+      if (!devId && typeof window !== 'undefined') {
         try {
-          newStream = await navigator.mediaDevices.getUserMedia(constraints);
-        } catch (constraintErr) {
-          console.warn('Constrained camera request failed, attempting basic fallback:', constraintErr);
+          const storedId = localStorage.getItem('opticore_preferred_camera_id');
+          if (storedId) {
+            devId = storedId;
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+
+      try {
+        let newStream: MediaStream | null = null;
+
+        if (devId) {
+          // Attempt 1: Exact device ID with ideal 720p resolution
+          try {
+            newStream = await navigator.mediaDevices.getUserMedia({
+              audio: false,
+              video: {
+                deviceId: { exact: devId },
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
+              },
+            });
+          } catch (err1) {
+            console.warn('Attempt 1 (exact + 720p) failed, trying exact device alone:', err1);
+            // Attempt 2: Exact device ID alone (native hardware resolution)
+            try {
+              newStream = await navigator.mediaDevices.getUserMedia({
+                audio: false,
+                video: {
+                  deviceId: { exact: devId },
+                },
+              });
+            } catch (err2) {
+              console.warn('Attempt 2 (exact alone) failed, falling back to ideal deviceId:', err2);
+              // Attempt 3: Ideal device ID
+              newStream = await navigator.mediaDevices.getUserMedia({
+                audio: false,
+                video: {
+                  deviceId: { ideal: devId },
+                },
+              });
+            }
+          }
+        } else {
+          // Default camera or facing mode
           newStream = await navigator.mediaDevices.getUserMedia({
             audio: false,
-            video: devId ? { deviceId: devId } : true,
+            video: {
+              facingMode: facing,
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
           });
+        }
+
+        if (!newStream) {
+          throw new Error('Could not acquire media stream from camera.');
         }
 
         streamRef.current = newStream;
@@ -158,6 +221,17 @@ export const CameraViewport = forwardRef<CameraViewportRef, CameraViewportProps>
         const label = videoTrack?.label || (facing === 'user' ? 'Front Lens' : 'Rear Lens');
         setActiveCameraLabel(label);
 
+        const settings = videoTrack?.getSettings();
+        if (settings?.deviceId) {
+          setSelectedDeviceId(settings.deviceId);
+        } else if (devId) {
+          setSelectedDeviceId(devId);
+        }
+
+        if (settings?.width && settings?.height) {
+          setLiveResolution(`${settings.width}x${settings.height}`);
+        }
+
         // Bind stream to video element and play
         if (videoRef.current) {
           videoRef.current.srcObject = newStream;
@@ -168,15 +242,48 @@ export const CameraViewport = forwardRef<CameraViewportRef, CameraViewportProps>
 
         // Re-enumerate to get real device names now that permission is granted
         const updatedDevices = await enumerateCameras();
-        if (updatedDevices && updatedDevices.length > 0 && !devId && videoTrack) {
-          const matched = updatedDevices.find((d) => d.label === videoTrack.label);
-          if (matched) {
-            setSelectedDeviceId(matched.deviceId);
+        if (updatedDevices && updatedDevices.length > 0) {
+          if (!devId && videoTrack) {
+            const matched = updatedDevices.find((d) => d.label === videoTrack.label);
+            if (matched) {
+              setSelectedDeviceId(matched.deviceId);
+            }
+
+            // Smart Auto-Promotion: If Chromium defaulted to a virtual/phone camera (like Redmi A2+ or DroidCam),
+            // and a physical hardware Integrated Camera is present on the PC, auto-promote to the physical camera!
+            const isVirtual =
+              videoTrack.label.toLowerCase().includes('virtual') ||
+              videoTrack.label.toLowerCase().includes('redmi');
+            const physicalCam = updatedDevices.find(
+              (d) =>
+                d.label.toLowerCase().includes('integrated') ||
+                d.label.toLowerCase().includes('built-in') ||
+                (!d.label.toLowerCase().includes('virtual') && !d.label.toLowerCase().includes('redmi'))
+            );
+
+            if (isVirtual && physicalCam && physicalCam.deviceId) {
+              console.log('OptiCore: Auto-promoting physical Integrated Camera over virtual device:', physicalCam.label);
+              // Switch directly to the physical camera
+              setSelectedDeviceId(physicalCam.deviceId);
+              try {
+                localStorage.setItem('opticore_preferred_camera_id', physicalCam.deviceId);
+                localStorage.setItem('opticore_preferred_camera_label', physicalCam.label);
+              } catch {}
+              // Restart with the physical camera device
+              setTimeout(() => {
+                startCamera(physicalCam.deviceId, facing);
+              }, 50);
+              return;
+            }
           }
         }
       } catch (err: any) {
         console.error('Camera request error:', err);
-        setCamError(err?.message ?? 'Camera access was denied or not found');
+        const errMsg =
+          err?.name === 'NotReadableError'
+            ? 'Camera hardware is locked by another application (Zoom, Teams, or Windows Camera)'
+            : err?.message ?? 'Camera access was denied or not found';
+        setCamError(errMsg);
         setRequesting(false);
         onCameraReady?.(false);
       }
@@ -184,13 +291,53 @@ export const CameraViewport = forwardRef<CameraViewportRef, CameraViewportProps>
     [mode, selectedDeviceId, facingMode, stopStream, onCameraReady, enumerateCameras],
   );
 
-  /* Initial mount: start camera */
+  /* Handle manual camera device selection from dropdown */
+  const handleSelectCameraDevice = useCallback(
+    (newDeviceId: string) => {
+      setSelectedDeviceId(newDeviceId);
+      try {
+        localStorage.setItem('opticore_preferred_camera_id', newDeviceId);
+        const dev = availableDevices.find((d) => d.deviceId === newDeviceId);
+        if (dev && dev.label) {
+          localStorage.setItem('opticore_preferred_camera_label', dev.label);
+        }
+      } catch {
+        /* ignore localStorage error */
+      }
+      startCamera(newDeviceId, facingMode);
+    },
+    [availableDevices, facingMode, startCamera],
+  );
+
+  /* Initial mount: probe devices and restore saved camera */
   useEffect(() => {
-    enumerateCameras();
-    if (mode === 'live') {
-      startCamera();
-    }
+    let mounted = true;
+    const initCameras = async () => {
+      const devices = await enumerateCameras();
+      if (!mounted) return;
+
+      let preferredId: string | null = null;
+      try {
+        const storedId = localStorage.getItem('opticore_preferred_camera_id');
+        const storedLabel = localStorage.getItem('opticore_preferred_camera_label');
+        if (devices.length > 0 && storedLabel) {
+          const match = devices.find((d) => d.label === storedLabel);
+          if (match) preferredId = match.deviceId;
+        } else if (storedId) {
+          preferredId = storedId;
+        }
+      } catch {
+        /* ignore */
+      }
+
+      if (mode === 'live') {
+        startCamera(preferredId || undefined);
+      }
+    };
+
+    initCameras();
     return () => {
+      mounted = false;
       stopStream();
     };
   }, [mode]);
@@ -203,19 +350,24 @@ export const CameraViewport = forwardRef<CameraViewportRef, CameraViewportProps>
     }
   }, [selectedCameraId]);
 
-  /* Handle manual camera device selection from dropdown */
-  const handleSelectCameraDevice = (newDeviceId: string) => {
-    setSelectedDeviceId(newDeviceId);
-    startCamera(newDeviceId, facingMode);
-  };
-
-  /* Toggle Front/Back camera lens */
+  /* Toggle Front/Back camera lens or cycle detected cameras */
   const switchCamera = useCallback(() => {
+    if (availableDevices.length > 1) {
+      const currentIndex = availableDevices.findIndex(
+        (d) => d.deviceId === selectedDeviceId || (activeCameraLabel && d.label === activeCameraLabel),
+      );
+      const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % availableDevices.length : 0;
+      const nextDevice = availableDevices[nextIndex];
+      if (nextDevice && nextDevice.deviceId) {
+        handleSelectCameraDevice(nextDevice.deviceId);
+        return;
+      }
+    }
     const nextFacing = facingMode === 'user' ? 'environment' : 'user';
     setFacingMode(nextFacing);
     setSelectedDeviceId('');
     startCamera('', nextFacing);
-  }, [facingMode, startCamera]);
+  }, [availableDevices, selectedDeviceId, activeCameraLabel, facingMode, handleSelectCameraDevice, startCamera]);
 
   /* Capture frame to Base64 JPEG string */
   const captureFrame = useCallback((): string | null => {
@@ -293,7 +445,13 @@ export const CameraViewport = forwardRef<CameraViewportRef, CameraViewportProps>
             }}
           />
           {!hasFeed && (
-            <OfflineState error={camError} requesting={requesting} onConnect={() => startCamera()} />
+            <OfflineState
+              error={camError}
+              requesting={requesting}
+              availableDevices={availableDevices}
+              onConnect={() => startCamera()}
+              onSelectAlternate={(devId) => handleSelectCameraDevice(devId)}
+            />
           )}
         </>
       ) : imageUrl ? (
@@ -446,35 +604,254 @@ export const CameraViewport = forwardRef<CameraViewportRef, CameraViewportProps>
           position: 'absolute',
           top: 18,
           right: 20,
-          zIndex: 10,
+          zIndex: 20,
           display: 'flex',
           alignItems: 'center',
           gap: 8,
         }}
       >
-        {mode === 'live' && availableDevices.length > 0 && (
-          <select
-            value={selectedDeviceId}
-            onChange={(e) => handleSelectCameraDevice(e.target.value)}
-            style={{
-              background: 'rgba(6,8,14,0.75)',
-              border: '1px solid rgba(255,255,255,0.12)',
-              borderRadius: 8,
-              color: 'rgba(255,255,255,0.75)',
-              fontSize: 9,
-              padding: '3px 8px',
-              outline: 'none',
-              cursor: 'pointer',
-              backdropFilter: 'blur(12px)',
-            }}
-          >
-            <option value="">Default Camera</option>
-            {availableDevices.map((d, i) => (
-              <option key={d.deviceId || `cam-${i}`} value={d.deviceId}>
-                {d.label || `Camera ${i + 1}`}
-              </option>
-            ))}
-          </select>
+        {/* Custom Glassmorphic Camera Device Selector */}
+        {mode === 'live' && (
+          <div ref={menuRef} style={{ position: 'relative' }}>
+            <button
+              type="button"
+              onClick={() => setShowDeviceMenu((prev) => !prev)}
+              title="Select camera sensor"
+              style={{
+                background: 'rgba(6,8,14,0.85)',
+                border: showDeviceMenu ? '1px solid rgba(155,138,251,0.60)' : '1px solid rgba(155,138,251,0.30)',
+                borderRadius: 10,
+                color: '#FFFFFF',
+                fontSize: 9.5,
+                fontWeight: 600,
+                padding: '5px 11px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 7,
+                cursor: 'pointer',
+                backdropFilter: 'blur(16px)',
+                boxShadow: showDeviceMenu ? '0 0 20px rgba(155,138,251,0.35)' : '0 4px 20px rgba(0,0,0,0.5)',
+                transition: 'all 0.18s ease',
+              }}
+            >
+              {/* Live status dot */}
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  background: hasFeed ? '#10B981' : '#F59E0B',
+                  boxShadow: hasFeed ? '0 0 8px #10B981' : '0 0 6px #F59E0B',
+                  flexShrink: 0,
+                }}
+              />
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" />
+                <circle cx="12" cy="13" r="4" />
+              </svg>
+              <span style={{ maxWidth: 165, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {activeCameraLabel || (availableDevices.length > 0 ? availableDevices[0].label : 'Select Camera')}
+              </span>
+              {availableDevices.length > 1 && (
+                <span
+                  style={{
+                    fontSize: 8,
+                    fontWeight: 700,
+                    padding: '1px 5px',
+                    borderRadius: 999,
+                    background: 'rgba(155,138,251,0.20)',
+                    color: '#B892FF',
+                    border: '1px solid rgba(155,138,251,0.30)',
+                  }}
+                >
+                  {availableDevices.length}
+                </span>
+              )}
+              <svg
+                viewBox="0 0 24 24"
+                width="10"
+                height="10"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                style={{
+                  transform: showDeviceMenu ? 'rotate(180deg)' : 'none',
+                  transition: 'transform 0.2s ease',
+                  opacity: 0.7,
+                }}
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+
+            {/* Glassmorphic Animated Dropdown Menu */}
+            <AnimatePresence>
+              {showDeviceMenu && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -4, scale: 0.97 }}
+                  transition={{ duration: 0.16, ease: 'easeOut' }}
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 8px)',
+                    right: 0,
+                    minWidth: 280,
+                    background: '#0B0E17',
+                    border: '1px solid rgba(155,138,251,0.35)',
+                    borderRadius: 14,
+                    padding: 8,
+                    boxShadow: '0 20px 50px rgba(0,0,0,0.7), 0 0 25px rgba(155,138,251,0.18)',
+                    zIndex: 50,
+                    backdropFilter: 'blur(24px)',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '4px 8px 6px',
+                      borderBottom: '1px solid rgba(255,255,255,0.06)',
+                      marginBottom: 6,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 8,
+                        fontWeight: 700,
+                        letterSpacing: '0.16em',
+                        color: 'var(--text-muted)',
+                        textTransform: 'uppercase',
+                      }}
+                    >
+                      Detected Camera Hardware
+                    </span>
+                    <span style={{ fontSize: 7.5, color: 'rgba(255,255,255,0.35)', fontFamily: 'monospace' }}>
+                      {availableDevices.length} available
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 220, overflowY: 'auto' }}>
+                    {availableDevices.map((d, i) => {
+                      const isSelected =
+                        (selectedDeviceId && d.deviceId === selectedDeviceId) ||
+                        (activeCameraLabel && d.label === activeCameraLabel);
+                      const isIntegrated =
+                        d.label.toLowerCase().includes('integrated') ||
+                        d.label.toLowerCase().includes('built-in');
+                      const isVirtual =
+                        d.label.toLowerCase().includes('virtual') ||
+                        d.label.toLowerCase().includes('redmi');
+
+                      return (
+                        <button
+                          key={d.deviceId || `cam-${i}`}
+                          type="button"
+                          onClick={() => {
+                            handleSelectCameraDevice(d.deviceId);
+                            setShowDeviceMenu(false);
+                          }}
+                          style={{
+                            width: '100%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 10,
+                            padding: '8px 10px',
+                            borderRadius: 9,
+                            background: isSelected
+                              ? 'linear-gradient(135deg, rgba(155,138,251,0.22), rgba(111,168,255,0.15))'
+                              : 'rgba(255,255,255,0.03)',
+                            border: isSelected
+                              ? '1px solid rgba(155,138,251,0.45)'
+                              : '1px solid rgba(255,255,255,0.06)',
+                            color: isSelected ? '#FFFFFF' : 'rgba(255,255,255,0.80)',
+                            fontSize: 10,
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
+                            <span
+                              style={{
+                                width: 6,
+                                height: 6,
+                                borderRadius: '50%',
+                                background: isSelected ? '#10B981' : 'rgba(255,255,255,0.25)',
+                                boxShadow: isSelected ? '0 0 8px #10B981' : 'none',
+                                flexShrink: 0,
+                              }}
+                            />
+                            <span
+                              style={{
+                                fontWeight: isSelected ? 600 : 400,
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                              }}
+                            >
+                              {d.label || `Camera ${i + 1}`}
+                            </span>
+                          </div>
+                          <span
+                            style={{
+                              fontSize: 7.5,
+                              fontWeight: 600,
+                              padding: '2px 6px',
+                              borderRadius: 4,
+                              background: isIntegrated
+                                ? 'rgba(114,214,163,0.15)'
+                                : isVirtual
+                                ? 'rgba(96,165,250,0.15)'
+                                : 'rgba(255,255,255,0.08)',
+                              color: isIntegrated ? '#72D6A3' : isVirtual ? '#60A5FA' : 'var(--text-muted)',
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.08em',
+                              flexShrink: 0,
+                            }}
+                          >
+                            {isIntegrated ? 'Physical' : isVirtual ? 'Virtual' : 'USB'}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div
+                    style={{
+                      borderTop: '1px solid rgba(255,255,255,0.08)',
+                      marginTop: 6,
+                      paddingTop: 6,
+                      display: 'flex',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        enumerateCameras();
+                      }}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'var(--oc-accent)',
+                        fontSize: 8.5,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        letterSpacing: '0.10em',
+                        textTransform: 'uppercase',
+                        padding: '4px 8px',
+                      }}
+                    >
+                      🔄 Refresh Camera Sensors
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         )}
 
         {mode === 'live' && (
@@ -487,7 +864,7 @@ export const CameraViewport = forwardRef<CameraViewportRef, CameraViewportProps>
               borderRadius: 8,
               color: 'rgba(255,255,255,0.70)',
               fontSize: 10,
-              padding: '4px 8px',
+              padding: '5px 9px',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -508,7 +885,7 @@ export const CameraViewport = forwardRef<CameraViewportRef, CameraViewportProps>
             borderRadius: 8,
             color: 'rgba(255,255,255,0.70)',
             fontSize: 10,
-            padding: '4px 8px',
+            padding: '5px 9px',
             cursor: 'pointer',
             backdropFilter: 'blur(12px)',
           }}
@@ -516,11 +893,9 @@ export const CameraViewport = forwardRef<CameraViewportRef, CameraViewportProps>
           {isFullscreen ? '✕ Exit' : '⛶ Expand'}
         </button>
 
-        {resolution && (
-          <span style={{ fontSize: 8.5, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.30)' }}>
-            {resolution}
-          </span>
-        )}
+        <span style={{ fontSize: 8.5, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.40)', fontFamily: 'monospace' }}>
+          {liveResolution || resolution || '1280x720'}
+        </span>
       </div>
 
       {/* ── HUD: Bottom-Left Model Indicator ──────────────────────────── */}
@@ -589,11 +964,15 @@ export const CameraViewport = forwardRef<CameraViewportRef, CameraViewportProps>
 function OfflineState({
   error,
   requesting,
+  availableDevices = [],
   onConnect,
+  onSelectAlternate,
 }: {
   error: string | null;
   requesting: boolean;
+  availableDevices?: MediaDeviceInfo[];
   onConnect: () => void;
+  onSelectAlternate?: (devId: string) => void;
 }) {
   return (
     <div
@@ -641,18 +1020,19 @@ function OfflineState({
             fontWeight: 500,
             letterSpacing: '0.20em',
             textTransform: 'uppercase',
-            color: 'rgba(255,255,255,0.60)',
+            color: error ? '#F87171' : 'rgba(255,255,255,0.60)',
           }}
         >
-          {requesting ? 'Initializing Camera…' : error ? 'Camera Permission Denied' : 'Camera Feed Idle'}
+          {requesting ? 'Initializing Camera…' : error ? 'Camera Hardware Busy or Denied' : 'Camera Feed Idle'}
         </span>
         <span
           style={{
             fontSize: 9,
             fontWeight: 400,
             letterSpacing: '0.08em',
-            color: 'rgba(255,255,255,0.30)',
-            maxWidth: 320,
+            color: 'rgba(255,255,255,0.35)',
+            maxWidth: 360,
+            lineHeight: 1.5,
           }}
         >
           {error ?? 'Click below to allow browser camera access, or upload an image to test.'}
@@ -660,25 +1040,62 @@ function OfflineState({
       </div>
 
       {!requesting && (
-        <button
-          onClick={onConnect}
-          style={{
-            padding: '9px 24px',
-            background: 'linear-gradient(135deg, rgba(155,138,251,0.25), rgba(111,168,255,0.15))',
-            border: '1px solid rgba(155,138,251,0.40)',
-            borderRadius: 999,
-            color: '#E8E5FF',
-            fontSize: 10,
-            fontWeight: 600,
-            letterSpacing: '0.18em',
-            textTransform: 'uppercase',
-            cursor: 'pointer',
-            backdropFilter: 'blur(16px)',
-            boxShadow: '0 4px 20px rgba(155,138,251,0.20)',
-          }}
-        >
-          Enable Camera Feed
-        </button>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+          <button
+            type="button"
+            onClick={onConnect}
+            style={{
+              padding: '9px 24px',
+              background: 'linear-gradient(135deg, rgba(155,138,251,0.25), rgba(111,168,255,0.15))',
+              border: '1px solid rgba(155,138,251,0.40)',
+              borderRadius: 999,
+              color: '#E8E5FF',
+              fontSize: 10,
+              fontWeight: 600,
+              letterSpacing: '0.18em',
+              textTransform: 'uppercase',
+              cursor: 'pointer',
+              backdropFilter: 'blur(16px)',
+              boxShadow: '0 4px 20px rgba(155,138,251,0.20)',
+            }}
+          >
+            {error ? 'Retry Camera Feed' : 'Enable Camera Feed'}
+          </button>
+
+          {error && availableDevices.length > 0 && onSelectAlternate && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, marginTop: 4 }}>
+              <span style={{ fontSize: 8, color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                Or select an alternate camera sensor:
+              </span>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center', maxWidth: 380 }}>
+                {availableDevices.map((d, i) => (
+                  <button
+                    key={d.deviceId || i}
+                    type="button"
+                    onClick={() => onSelectAlternate(d.deviceId)}
+                    style={{
+                      padding: '5px 12px',
+                      borderRadius: 8,
+                      background: 'rgba(255,255,255,0.06)',
+                      border: '1px solid rgba(155,138,251,0.35)',
+                      color: 'rgba(255,255,255,0.90)',
+                      fontSize: 8.5,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <span>📷</span>
+                    <span>{d.label ? (d.label.length > 22 ? d.label.slice(0, 20) + '…' : d.label) : `Sensor ${i + 1}`}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
