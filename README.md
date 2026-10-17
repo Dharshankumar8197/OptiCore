@@ -1,264 +1,156 @@
 # OptiCore
 
-OptiCore is an AI-powered assistive computer-vision platform. It combines real-time object detection, device management, and a premium glassmorphism interface for vision intelligence control.
+**OptiCore** is an AI-powered vision intelligence platform combining real-time object detection (`best.pt`), cross-device peer discovery, and an ultra-smooth glassmorphism Vision Studio interface.
+
+[![Repository](https://img.shields.io/badge/GitHub-OptiCore-8A2BE2?logo=github)](https://github.com/Dharshankumar8197/OptiCore)
+[![FastAPI](https://img.shields.io/badge/Backend-FastAPI%20%7C%20PyTorch-009688?logo=fastapi)](https://fastapi.tiangolo.com/)
+[![Next.js](https://img.shields.io/badge/Web-Next.js%2016-black?logo=next.js)](https://nextjs.org/)
+[![Docker](https://img.shields.io/badge/Deploy-Docker%20Desktop-2496ED?logo=docker)](https://www.docker.com/)
 
 ---
 
-## 🌐 1-Line Remote Backend Deployment (Any System)
+## ⚡ 1-Line Remote Backend Deployment (Any System)
 
-Run this single command on **any system** (Linux VPS, Ubuntu, Debian, macOS, or Cloud Server) to download, start the OptiCore Backend container with `best.pt`, and instantly expose a public HTTPS Ngrok tunnel:
+Run this single command on **any machine** (Windows, Linux, macOS, or Cloud VPS) to automatically pull or build the OptiCore Backend container, mount storage, and expose a secure public HTTPS Ngrok tunnel:
 
+### Linux / macOS / Cloud VPS:
 ```bash
-curl -sSL https://raw.githubusercontent.com/Dharshankumar8197/OptiiCore/main/deploy_backend.sh | bash -s -- --authtoken YOUR_NGROK_AUTHTOKEN
+curl -sSL https://raw.githubusercontent.com/Dharshankumar8197/OptiCore/main/deploy_backend.sh | bash -s -- --authtoken YOUR_NGROK_AUTHTOKEN
 ```
 
-On **Windows PowerShell**:
-
+### Windows (PowerShell):
 ```powershell
-irm https://raw.githubusercontent.com/Dharshankumar8197/OptiiCore/main/deploy_backend.ps1 | iex
+irm https://raw.githubusercontent.com/Dharshankumar8197/OptiCore/main/deploy_backend.ps1 | iex
 ```
 
 ### Direct Docker Run:
-
 ```bash
 docker run -d \
   --name opticore-backend \
   --restart unless-stopped \
   -p 8000:8000 \
   -p 4040:4040 \
-  -e NGROK_AUTHTOKEN="your_token" \
-  ghcr.io/dharshankumar8197/optiicore-backend:latest
+  -e NGROK_AUTHTOKEN="your_token_here" \
+  -v opticore_data:/app/data \
+  ghcr.io/dharshankumar8197/opticore-backend:latest
 ```
 
-Once running, the container outputs your **Public HTTPS URL** (e.g. `https://xxxx.ngrok-free.app`).
+> **Public Access**: When started with `NGROK_AUTHTOKEN`, the container prints your live HTTPS URL (e.g. `https://xxxx.ngrok-free.app`), allowing mobile and remote devices to securely stream camera feeds and access the model.
 
-Simply connect your **Web App** (`web/.env.local`) or **Mobile App** to this server:
-```env
-NEXT_PUBLIC_API_URL=https://xxxx.ngrok-free.app
-NEXT_PUBLIC_WS_URL=wss://xxxx.ngrok-free.app
+---
+
+## 💾 Zero-Config SQLite Database
+
+**No external database server installation required!**
+- OptiCore uses an embedded SQLite database engine (`data/opticore.db`).
+- The directory and all database tables (`users`, `devices`, `model_configs`, `telemetry_logs`) are **created automatically** on initial backend startup.
+- In Docker, data is persisted across restarts via the volume mount (`./backend/data` or `opticore_data`).
+
+---
+
+## ⚙️ PowerShell Environment Configuration
+
+Easily inspect and edit your environment variables directly from PowerShell:
+
+```powershell
+# Open both Backend (.env) and Web (.env.local) in your editor (VS Code or Notepad)
+.\env.ps1
+
+# Or open a specific target
+.\open_env.ps1 backend
+.\open_env.ps1 web
+```
+
+If `.env` or `web/.env.local` does not exist, the script automatically generates them from templates.
+
+---
+
+## 🐳 Running with Docker Desktop
+
+1. Start **Docker Desktop** on your PC.
+2. In the repository root, run:
+
+```powershell
+.\run_docker.ps1
+```
+*Or via Docker Compose:*
+```bash
+docker compose up --build
+```
+
+### Endpoints:
+| Service | URL | Purpose |
+| :--- | :--- | :--- |
+| **Vision Studio Web** | `http://localhost:3000` | Real-time AI Vision Studio & Testing Interface |
+| **Backend API** | `http://localhost:8000` | FastAPI Inference & Hardware Gateway |
+| **Interactive Docs** | `http://localhost:8000/docs` | Swagger UI for all REST & Detection endpoints |
+| **Ngrok Tunnel Inspector** | `http://localhost:4040` | Live public HTTPS tunnel logs & active URLs |
+
+---
+
+## 🔬 Testing the AI Model (`best.pt`)
+
+Open the **MODEL** tab in the web interface:
+
+1. **⚡ 1-Click Presets**: Instant evaluation on curated scenes (*Tech Desk*, *Urban Avenue*, *Road Junction*).
+2. **📁 File Upload**: Drag and drop any image or frame for immediate inference.
+3. **📹 Live Camera**:
+   - Access webcams or mobile cameras (via front/rear lens toggle).
+   - Single-shot **Detect Frame** or continuous **Auto-Scan** (1–10 FPS).
+   - High-precision telemetry: Preprocess, Inference, and Postprocess latency (ms) with hardware-accelerated, jitter-free bounding box tracking.
+
+---
+
+## 🌐 OptiCore Device Mesh (Peer Discovery)
+
+Navigate to the **CONNECTIVITY** tab:
+- **Device Mesh**: Automatically lists other devices running the OptiCore app (Mobile, Pi, edge cameras) connected to the local network or backend.
+- **Remote Camera Request**: Handshake camera feeds from peer devices to pipe their video streams into the inference engine.
+- **Bluetooth & USB**: Pair peripherals, inspect USB cameras, and run TTS audio checks.
+
+---
+
+## 🛠️ Local Development (Without Docker)
+
+### Backend:
+```powershell
+cd backend
+python -m venv venv
+.\venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### Web App:
+```powershell
+cd web
+npm install
+npm run dev
 ```
 
 ---
 
-## Project Structure
+## 📁 Repository Structure
 
 ```
 OptiCore/
-│
-├── web/                    # Next.js web application (Vision Lab + Device Control)
-├── mobile/                 # React Native mobile app (Expo)
-├── backend/                # FastAPI backend (inference, auth, database)
-└── pi/                     # Raspberry Pi runtime (future development)
+├── backend/                  # FastAPI inference engine & SQLite database
+│   ├── app/                  # REST routers, YOLO inference, auth, and database models
+│   ├── models/               # PyTorch model weights (best.pt)
+│   ├── Dockerfile            # Standard multi-stage container
+│   ├── Dockerfile.standalone # Self-contained container bundled with Ngrok CLI
+│   └── entrypoint.sh         # Production container supervisor
+├── web/                      # Next.js 16 Vision Studio
+│   ├── src/components/       # Glassmorphism UI, CameraViewport, and tab modules
+│   └── src/lib/              # API clients and WebSocket streaming handlers
+├── deploy_backend.sh         # 1-line Linux/macOS deployment script
+├── deploy_backend.ps1        # 1-line Windows PowerShell deployment script
+├── run_docker.ps1            # 1-click Docker Desktop launcher
+├── open_env.ps1              # Environment configuration helper
+└── docker-compose.yml        # Orchestration for Web, Backend, and Ngrok
 ```
 
-## Quick Start (Local Development)
+---
 
-### Prerequisites
-- Node.js 18+
-- Python 3.9+
-- npm or yarn
-
-### Backend Setup
-
-```bash
-cd backend
-python -m venv venv
-
-# On Windows
-venv\Scripts\activate
-
-# On macOS/Linux
-source venv/bin/activate
-
-pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
-
-Backend runs at: `http://localhost:8000`
-API Docs: `http://localhost:8000/docs`
-
-### Web Setup
-
-```bash
-cd web
-npm install
-npm run dev
-```
-
-Web runs at: `http://localhost:3000`
-
-### Mobile Setup
-
-```bash
-cd mobile
-npm install
-npx expo start
-```
-
-## Features
-
-- **Real-time Vision**: Live camera feed with AI object detection
-- **Device Management**: Connect and manage cameras, Bluetooth, and Wi-Fi devices
-- **Model Testing**: Upload images/videos or test live camera feeds with YOLO inference
-- **Premium UI**: Glassmorphism design with frosted glass cards and atmospheric effects
-- **Authentication**: Secure JWT-based authentication system
-- **Database**: SQLAlchemy ORM with SQLite (development) / PostgreSQL (production)
-
-## Technology Stack
-
-### Backend
-- **Framework**: FastAPI
-- **Database**: SQLAlchemy + Alembic migrations
-- **AI/ML**: Ultralytics YOLO
-- **Vision**: OpenCV
-- **Auth**: JWT + Argon2/bcrypt
-- **Bluetooth**: Bleak
-- **WebSocket**: FastAPI WebSocket support
-
-### Web
-- **Framework**: Next.js
-- **UI**: Tailwind CSS + shadcn/ui
-- **Animation**: Framer Motion
-- **Icons**: Lucide React
-
-### Mobile
-- **Framework**: React Native
-- **Platform**: Expo
-- **Camera**: expo-camera
-- **Navigation**: React Navigation
-
-## Database
-
-The database schema includes:
-
-- `users` - User accounts and authentication
-- `sessions` - JWT session tracking
-- `devices` - Connected devices (cameras, sensors, etc.)
-- `camera_sources` - Camera feed definitions
-- `models` - AI models (best.pt, etc.)
-- `model_configs` - Inference configuration
-- `inference_sessions` - Model testing history
-- `detection_events` - Detection metadata
-- `device_events` - Device connection events
-- `bluetooth_devices` - Paired Bluetooth devices
-- `wifi_devices` - Wi-Fi connected devices
-
-## API Routes
-
-### Authentication
-- `POST /api/auth/register` - Register new user
-- `POST /api/auth/login` - Authenticate user
-- `POST /api/auth/logout` - Logout
-- `GET /api/auth/me` - Current user
-
-### Vision & Inference
-- `GET /api/model` - Get model status
-- `POST /api/inference/image` - Run inference on image
-- `POST /api/inference/video` - Run inference on video
-- `WS /ws/inference` - WebSocket for live inference stream
-
-### Devices
-- `GET /api/devices` - List connected devices
-- `GET /api/cameras` - List available camera sources
-- `GET /api/bluetooth/devices` - List Bluetooth devices
-- `POST /api/bluetooth/scan` - Scan for Bluetooth devices
-- `GET /api/wifi/devices` - List Wi-Fi devices
-
-### System
-- `GET /health` - Health check
-- `GET /api/status` - System status
-
-## Environment Variables
-
-Copy `.env.example` to `.env` and configure:
-
-```env
-ENVIRONMENT=development
-DATABASE_URL=sqlite:///./data/opticore.db
-JWT_SECRET_KEY=your-secret-key
-MODEL_PATH=./models/best.pt
-CONFIDENCE_THRESHOLD=0.50
-ENABLE_BLUETOOTH=true
-ENABLE_WEBRTC=true
-```
-
-## Development
-
-### Running all services locally
-
-Terminal 1 - Backend:
-```bash
-cd backend
-source venv/bin/activate
-uvicorn app.main:app --reload
-```
-
-Terminal 2 - Web:
-```bash
-cd web
-npm run dev
-```
-
-Terminal 3 - Mobile:
-```bash
-cd mobile
-npx expo start
-```
-
-### Testing
-
-Backend tests:
-```bash
-cd backend
-pytest
-```
-
-## Vision Lab Interface
-
-The main web application (`/dashboard`) provides:
-
-- **Vision**: Real-time camera feed with AI detection overlays
-- **Camera**: Manage and connect camera sources
-- **Devices**: Connected device status and control
-- **Bluetooth**: Scan and pair Bluetooth devices
-- **Wi-Fi**: Discover OptiCore devices on network
-- **Model**: Configure and test YOLO inference
-- **Status**: System health and performance metrics
-- **Settings**: User preferences and configuration
-
-## Design
-
-The interface uses a premium glassmorphism aesthetic:
-
-- Dark atmospheric background with floating 3D geometric objects
-- Frosted glass cards with backdrop blur
-- Thin translucent borders
-- Soft shadows and subtle reflections
-- Purple/blue ambient lighting
-- Large elegant typography
-- Smooth Framer Motion animations
-
-## Security
-
-- Passwords hashed with Argon2/bcrypt
-- JWT-based session authentication
-- Input validation and CORS protection
-- Protected dashboard routes
-- No arbitrary device access
-
-## Future Development
-
-- **Raspberry Pi Runtime**: Optimized inference on Pi Zero/Pi 4
-- **Advanced Tracking**: Multi-object tracking with ID persistence
-- **Cloud Integration**: Connect multiple devices to cloud backend
-- **Mobile Camera**: Phone acts as remote camera via Wi-Fi/Bluetooth
-- **Custom Models**: Support for user-uploaded YOLO models
-- **Analytics**: Detection statistics and performance monitoring
-
-## License
-
-Proprietary - OptiCore
-
-## Contact
-
-For questions or support, contact the OptiCore development team.
+## 📄 License
+MIT © [Dharshankumar8197](https://github.com/Dharshankumar8197)

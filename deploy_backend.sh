@@ -2,7 +2,7 @@
 # ==============================================================================
 #  OptiCore Backend 1-Line Deployment Script
 #  Usage:
-#    curl -sSL https://raw.githubusercontent.com/Dharshankumar8197/OptiiCore/main/deploy_backend.sh | bash -s -- --authtoken YOUR_TOKEN
+#    curl -sSL https://raw.githubusercontent.com/Dharshankumar8197/OptiCore/main/deploy_backend.sh | bash -s -- --authtoken YOUR_TOKEN
 # ==============================================================================
 
 set -e
@@ -22,7 +22,7 @@ echo -e "${NC}"
 NGROK_TOKEN=""
 PORT=8000
 CONTAINER_NAME="opticore-backend"
-IMAGE_NAME="ghcr.io/dharshankumar8197/optiicore-backend:latest"
+IMAGE_NAME="ghcr.io/dharshankumar8197/opticore-backend:latest"
 
 # Parse arguments
 while [[ "$#" -gt 0 ]]; do
@@ -73,7 +73,7 @@ if ! docker pull "$IMAGE_NAME" 2>/dev/null; then
     else
         # Clone minimal repo if curling standalone
         TEMP_DIR=$(mktemp -d)
-        git clone --depth 1 https://github.com/Dharshankumar8197/OptiiCore.git "$TEMP_DIR"
+        git clone --depth 1 https://github.com/Dharshankumar8197/OptiCore.git "$TEMP_DIR"
         docker build -f "$TEMP_DIR/backend/Dockerfile.standalone" -t "$IMAGE_NAME" "$TEMP_DIR/backend"
         rm -rf "$TEMP_DIR"
     fi

@@ -8,7 +8,6 @@ import {
   BluetoothScanResult,
   WiFiDeviceResponse,
   CameraSourceResponse,
-  WiFiNetwork,
 } from '@/lib/api';
 
 type ConnectivityTab = 'WIFI' | 'BLUETOOTH' | 'USB';
@@ -110,15 +109,6 @@ function WiFiSection({ state, onNavigateToModel, lastWsMessage }:
   const [accessStates, setAccessStates] = useState<Record<string,CameraAccessState>>({});
   const timers = useRef<Record<string,ReturnType<typeof setTimeout>>>({});
 
-  // Nearby network scanner state
-  const [networks, setNetworks]         = useState<WiFiNetwork[]>([]);
-  const [scanning, setScanning]         = useState(false);
-  const [scanError, setScanError]       = useState<string | null>(null);
-  const [connecting, setConnecting]     = useState<string | null>(null);
-  const [connectMsg, setConnectMsg]     = useState<Record<string, string>>({});
-  const [showPassword, setShowPassword] = useState<string | null>(null);
-  const [passwords, setPasswords]       = useState<Record<string, string>>({});
-
   const load = useCallback(async () => {
     setLoading(true);
     try { const r = await apiClient.getWifiDevices(); setDevices(r.devices??[]); }
@@ -144,199 +134,77 @@ function WiFiSection({ state, onNavigateToModel, lastWsMessage }:
       setAccessStates(p => p[id]==='pending' ? { ...p, [id]:'idle' } : p), 30000);
   };
 
-  const handleScan = async () => {
-    setScanning(true); setScanError(null);
-    try {
-      const nets = await apiClient.scanWifi();
-      setNetworks(nets);
-    } catch (e) {
-      setScanError(e instanceof Error ? e.message : 'Scan failed');
-      setNetworks([]);
-    } finally {
-      setScanning(false);
-    }
-  };
-
-  const handleConnect = async (ssid: string) => {
-    setConnecting(ssid);
-    setConnectMsg(p => ({ ...p, [ssid]: '' }));
-    try {
-      const pwd = passwords[ssid] || undefined;
-      const res = await apiClient.connectWifi(ssid, pwd);
-      setConnectMsg(p => ({ ...p, [ssid]: `✓ ${res.message}` }));
-      setShowPassword(null);
-      // refresh current network info after a moment
-      setTimeout(load, 2000);
-    } catch (e) {
-      setConnectMsg(p => ({ ...p, [ssid]: `✕ ${e instanceof Error ? e.message : 'Failed'}` }));
-    } finally {
-      setConnecting(null);
-    }
-  };
-
-  const signalBar = (sig: number | null) => {
-    if (sig === null) return '—';
-    if (sig >= 80) return '████';
-    if (sig >= 60) return '███░';
-    if (sig >= 40) return '██░░';
-    if (sig >= 20) return '█░░░';
-    return '░░░░';
-  };
-
   return (
     <div style={{ display:'flex',flexDirection:'column',gap:12 }}>
       {/* Current network state */}
       <Panel>
-        <SectionLabel label="Current Network" />
-        <InfoRow label="Status"     value={state.wifiConnected ? 'Connected' : 'Disconnected'} />
-        <InfoRow label="SSID"       value={state.wifiSsid ?? 'NOT DETECTED'} />
-        <InfoRow label="IP Address" value={state.wifiIp ?? 'NOT DETECTED'} />
-        <InfoRow label="Interface"  value={state.wifiInterface ?? 'NOT DETECTED'} />
-        <InfoRow label="Signal"     value={state.wifiSignalDbm != null ? `${state.wifiSignalDbm} dBm` : 'NOT DETECTED'} />
+        <SectionLabel label="Host Network Interface" />
+        <InfoRow label="Status"     value={state.wifiConnected ? 'Connected' : 'Offline / Local'} />
+        <InfoRow label="Local IP"   value={state.wifiIp ?? '127.0.0.1'} />
+        <InfoRow label="SSID"       value={state.wifiSsid ?? 'Local Network'} />
+        <InfoRow label="Interface"  value={state.wifiInterface ?? 'Ethernet/Wi-Fi'} />
       </Panel>
 
-      {/* Nearby networks scanner */}
+      {/* OptiCore Peer Device Discovery */}
       <Panel>
         <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14 }}>
-          <SectionLabel label="Available Networks" color="var(--oc-accent-2)" />
-          <Btn variant="primary" sm onClick={handleScan} loading={scanning}>
-            {scanning ? 'Scanning…' : '⌖ Scan'}
+          <div>
+            <SectionLabel label="OptiCore Device Mesh" color="var(--oc-accent)" />
+            <div style={{ fontSize:9, color:'var(--text-muted)', marginTop:-8, letterSpacing:'0.04em' }}>
+              Detect and link peer devices running the OptiCore app (Mobile, Pi, Cameras, Tablets)
+            </div>
+          </div>
+          <Btn variant="primary" sm onClick={load} loading={loading}>
+            {loading ? 'Discovering…' : '⌖ Discover Devices'}
           </Btn>
         </div>
 
-        {scanError && (
-          <div style={{ padding:'8px 12px',background:'rgba(228,125,135,0.10)',border:'1px solid rgba(228,125,135,0.25)',
-            borderRadius:10,fontSize:10,color:'rgba(228,125,135,0.85)',letterSpacing:'0.06em',marginBottom:12 }}>
-            {scanError}
+        {loading ? (
+          <Empty msg="Scanning for OptiCore devices on network…" />
+        ) : devices.length === 0 ? (
+          <div style={{ padding:'20px 0', textAlign:'center', display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
+            <span style={{ fontSize:10, color:'var(--text-muted)', letterSpacing:'0.10em', textTransform:'uppercase' }}>
+              No Peer Devices Detected
+            </span>
+            <span style={{ fontSize:9, color:'rgba(255,255,255,0.35)', maxWidth:360, lineHeight:1.5 }}>
+              Launch the OptiCore mobile app or start a remote device connected to your server to stream its camera feed here.
+            </span>
           </div>
-        )}
-
-        {networks.length === 0 && !scanning && (
-          <Empty msg={scanError ? 'Scan failed — check Wi-Fi adapter' : 'Tap Scan to discover nearby networks'} />
-        )}
-
-        <div style={{ display:'flex',flexDirection:'column',gap:6 }}>
-          {networks.map(net => {
-            const isConnected = net.connected;
-            const isBusy = connecting === net.ssid;
-            const msg = connectMsg[net.ssid];
-            const needsPassword = showPassword === net.ssid;
-            return (
-              <div key={net.ssid} style={{
-                padding:'11px 13px',
-                background: isConnected ? 'rgba(114,214,163,0.06)' : 'rgba(255,255,255,0.03)',
-                border:`1px solid ${isConnected ? 'rgba(114,214,163,0.22)' : 'rgba(255,255,255,0.08)'}`,
-                borderRadius:13,
-              }}>
-                {/* Network row */}
-                <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',gap:10 }}>
-                  <div style={{ display:'flex',alignItems:'center',gap:9,minWidth:0 }}>
-                    <StatusDot ok={isConnected} />
-                    <div style={{ minWidth:0 }}>
-                      <div style={{ fontSize:12,fontWeight:500,color:'var(--text-primary)',
-                        whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>
-                        {net.ssid}
-                      </div>
-                      <div style={{ fontSize:8.5,color:'var(--text-muted)',letterSpacing:'0.08em',
-                        textTransform:'uppercase',marginTop:1,display:'flex',gap:8 }}>
-                        <span style={{ color:'var(--oc-accent-2)',fontFamily:'monospace' }}>{signalBar(net.signal)}</span>
-                        {net.signal != null && <span>{net.signal}%</span>}
-                        {net.security && <span>{net.security}</span>}
-                        {net.frequency && <span>{net.frequency}</span>}
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{ flexShrink:0 }}>
-                    {isConnected
-                      ? <span style={{ fontSize:9,color:'var(--status-online)',letterSpacing:'0.12em',textTransform:'uppercase' }}>● Connected</span>
-                      : <Btn variant="primary" sm loading={isBusy}
-                          onClick={() => net.security && net.security !== 'Open'
-                            ? setShowPassword(needsPassword ? null : net.ssid)
-                            : handleConnect(net.ssid)}>
-                          {isBusy ? 'Connecting…' : 'Connect'}
-                        </Btn>
-                    }
-                  </div>
-                </div>
-
-                {/* Password input */}
-                {needsPassword && (
-                  <div style={{ marginTop:10,display:'flex',gap:8,alignItems:'center' }}>
-                    <input
-                      type="password"
-                      placeholder="Wi-Fi Password"
-                      value={passwords[net.ssid] ?? ''}
-                      onChange={e => setPasswords(p => ({ ...p, [net.ssid]: e.target.value }))}
-                      onKeyDown={e => e.key === 'Enter' && handleConnect(net.ssid)}
-                      style={{
-                        flex:1, padding:'7px 12px',
-                        background:'rgba(255,255,255,0.06)',
-                        border:'1px solid rgba(255,255,255,0.15)',
-                        borderRadius:9,
-                        color:'var(--text-primary)', fontSize:12,
-                        outline:'none',
-                      }}
-                    />
-                    <Btn variant="primary" sm loading={isBusy} onClick={() => handleConnect(net.ssid)}>
-                      Join
-                    </Btn>
-                    <Btn variant="ghost" sm onClick={() => setShowPassword(null)}>✕</Btn>
-                  </div>
-                )}
-
-                {/* Status message */}
-                {msg && (
-                  <div style={{ marginTop:6,fontSize:9,
-                    color: msg.startsWith('✓') ? 'var(--status-online)' : 'var(--status-offline)',
-                    letterSpacing:'0.08em' }}>
-                    {msg}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </Panel>
-
-      {/* OptiCore devices */}
-      <Panel>
-        <SectionLabel label="OptiCore Devices" color="var(--oc-accent)" />
-        {loading ? <Empty msg="Checking for devices…" /> : devices.length === 0
-          ? <Empty msg="No OptiCore devices registered on this network" />
-          : <div style={{ display:'flex',flexDirection:'column',gap:10 }}>
-              {devices.map(dev => {
-                const st = accessStates[dev.id] ?? 'idle';
-                return (
-                  <div key={dev.id} style={{ padding:'12px 14px', background:'rgba(255,255,255,0.03)',
-                    border:'1px solid rgba(255,255,255,0.07)', borderRadius:14 }}>
-                    <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8 }}>
-                      <div style={{ display:'flex',alignItems:'center',gap:8 }}>
-                        <StatusDot ok={dev.status==='online'} />
-                        <div>
-                          <div style={{ fontSize:12,fontWeight:500,color:'var(--text-primary)' }}>{dev.name}</div>
-                          <div style={{ fontSize:9,color:'var(--text-muted)',letterSpacing:'0.08em',textTransform:'uppercase',marginTop:2 }}>
-                            {dev.ip_address} · {dev.device_type}
-                          </div>
+        ) : (
+          <div style={{ display:'flex',flexDirection:'column',gap:10 }}>
+            {devices.map(dev => {
+              const st = accessStates[dev.id] ?? 'idle';
+              return (
+                <div key={dev.id} style={{ padding:'12px 14px', background:'rgba(255,255,255,0.03)',
+                  border:'1px solid rgba(255,255,255,0.07)', borderRadius:14 }}>
+                  <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8 }}>
+                    <div style={{ display:'flex',alignItems:'center',gap:8 }}>
+                      <StatusDot ok={dev.status==='online'} />
+                      <div>
+                        <div style={{ fontSize:12,fontWeight:600,color:'var(--text-primary)' }}>{dev.name}</div>
+                        <div style={{ fontSize:9,color:'var(--text-muted)',letterSpacing:'0.08em',textTransform:'uppercase',marginTop:2 }}>
+                          {dev.ip_address} · {dev.device_type} · {dev.status}
                         </div>
                       </div>
                     </div>
-                    <div style={{ display:'flex',alignItems:'center',gap:8,flexWrap:'wrap' }}>
-                      {st==='idle' && <Btn variant="primary" sm onClick={()=>requestAccess(dev.id)}>📷 Request Camera Access</Btn>}
-                      {st==='pending' && <span style={{ fontSize:9,color:'var(--status-standby)',letterSpacing:'0.12em',textTransform:'uppercase' }}>⏳ Awaiting Approval…</span>}
-                      {st==='approved' && <>
-                        <span style={{ fontSize:9,color:'var(--status-online)',letterSpacing:'0.12em',textTransform:'uppercase' }}>✓ Camera Available</span>
-                        <Btn variant="primary" sm onClick={()=>onNavigateToModel?.(dev.id)}>Open in Model</Btn>
-                      </>}
-                      {st==='denied' && <>
-                        <span style={{ fontSize:9,color:'var(--status-offline)',letterSpacing:'0.12em',textTransform:'uppercase' }}>✕ Access Denied</span>
-                        <Btn variant="ghost" sm onClick={()=>setAccessStates(p=>({...p,[dev.id]:'idle'}))}>Retry</Btn>
-                      </>}
-                    </div>
                   </div>
-                );
-              })}
-            </div>
-        }
+                  <div style={{ display:'flex',alignItems:'center',gap:8,flexWrap:'wrap' }}>
+                    {st==='idle' && <Btn variant="primary" sm onClick={()=>requestAccess(dev.id)}>📷 Request Camera Access</Btn>}
+                    {st==='pending' && <span style={{ fontSize:9,color:'var(--status-standby)',letterSpacing:'0.12em',textTransform:'uppercase' }}>⏳ Awaiting Approval…</span>}
+                    {st==='approved' && <>
+                      <span style={{ fontSize:9,color:'var(--status-online)',letterSpacing:'0.12em',textTransform:'uppercase' }}>✓ Camera Available</span>
+                      <Btn variant="primary" sm onClick={()=>onNavigateToModel?.(dev.id)}>Open in Model</Btn>
+                    </>}
+                    {st==='denied' && <>
+                      <span style={{ fontSize:9,color:'var(--status-offline)',letterSpacing:'0.12em',textTransform:'uppercase' }}>✕ Access Denied</span>
+                      <Btn variant="ghost" sm onClick={()=>setAccessStates(p=>({...p,[dev.id]:'idle'}))}>Retry</Btn>
+                    </>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </Panel>
     </div>
   );
@@ -508,7 +376,7 @@ function USBSection({ count, onNavigateToModel }:
 export function ConnectivityPage({ state, onNavigateToModel, lastWsMessage }: ConnectivityPageProps) {
   const [tab, setTab] = useState<ConnectivityTab>('WIFI');
   const tabs = [
-    { id:'WIFI' as const, label:'Wi-Fi' },
+    { id:'WIFI' as const, label:'Device Mesh' },
     { id:'BLUETOOTH' as const, label:'Bluetooth' },
     { id:'USB' as const, label:'USB / Local' },
   ];

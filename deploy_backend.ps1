@@ -1,7 +1,7 @@
 # ==============================================================================
 #  OptiCore Backend 1-Line Deployment Script (Windows PowerShell)
 #  Usage:
-#    irm https://raw.githubusercontent.com/Dharshankumar8197/OptiiCore/main/deploy_backend.ps1 | iex
+#    irm https://raw.githubusercontent.com/Dharshankumar8197/OptiCore/main/deploy_backend.ps1 | iex
 # ==============================================================================
 
 param(
@@ -33,7 +33,7 @@ if ([string]::IsNullOrWhiteSpace($Authtoken)) {
 }
 
 $ContainerName = "opticore-backend"
-$ImageName = "ghcr.io/dharshankumar8197/optiicore-backend:latest"
+$ImageName = "ghcr.io/dharshankumar8197/opticore-backend:latest"
 
 Write-Host "[*] Stopping existing OptiCore container if running..." -ForegroundColor Cyan
 docker stop $ContainerName 2>$null | Out-Null
@@ -47,10 +47,21 @@ try {
 } catch {}
 
 if (-not $pullSuccess) {
-    Write-Host "[*] Building locally from backend/Dockerfile.standalone..." -ForegroundColor Yellow
     $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
     if ([string]::IsNullOrEmpty($scriptDir)) { $scriptDir = (Get-Location).Path }
-    docker build -f "$scriptDir/backend/Dockerfile.standalone" -t $ImageName "$scriptDir/backend"
+    $dockerfile = Join-Path $scriptDir "backend\Dockerfile.standalone"
+    $backendDir = Join-Path $scriptDir "backend"
+
+    if (Test-Path $dockerfile) {
+        Write-Host "[*] Building locally from $dockerfile..." -ForegroundColor Yellow
+        docker build -f $dockerfile -t $ImageName $backendDir
+    } else {
+        Write-Host "[*] Cloning OptiCore repository to build Docker container..." -ForegroundColor Yellow
+        $tempBuildDir = Join-Path $env:TEMP "opticore_build_$(Get-Random)"
+        git clone --depth 1 https://github.com/Dharshankumar8197/OptiCore.git $tempBuildDir
+        docker build -f "$tempBuildDir/backend/Dockerfile.standalone" -t $ImageName "$tempBuildDir/backend"
+        Remove-Item -Recurse -Force $tempBuildDir -ErrorAction SilentlyContinue
+    }
 }
 
 Write-Host "[*] Starting OptiCore Backend container on port $Port..." -ForegroundColor Cyan

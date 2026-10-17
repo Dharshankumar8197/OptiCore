@@ -7,9 +7,16 @@ from typing import Generator
 
 from app.config import settings
 
-# Create engine
+import os
+
+# Create engine with automatic directory creation for SQLite
 if settings.database_url.startswith("sqlite"):
-    # SQLite requires special parameters
+    # Extract path and ensure parent directory exists (e.g. ./data/)
+    db_path = settings.database_url.replace("sqlite:///", "")
+    db_dir = os.path.dirname(db_path)
+    if db_dir:
+        os.makedirs(db_dir, exist_ok=True)
+
     engine = create_engine(
         settings.database_url,
         connect_args={"check_same_thread": False},
