@@ -2,9 +2,10 @@
 
 Aggregates Wi-Fi, Bluetooth, USB cameras, and App Users into a single
 'Optical Endpoints' mesh discovered via a sonar pulse scanner.
+Queries 100% real system devices and active network endpoints (NO dummy/seed values).
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
@@ -13,6 +14,8 @@ import uuid
 import logging
 import platform
 import subprocess
+import json
+import re
 
 from app.database import get_db
 from app.database.models import Device, CameraSource, BluetoothDevice, WiFiDevice
@@ -23,64 +26,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/connectivity", tags=["connectivity"])
 
 # In-memory registry for live App Users sharing their cameras
-# Stored with timestamps so stale entries can be cleaned up
 SHARED_APP_CAMERAS: Dict[str, Dict[str, Any]] = {}
-
-# Default simulated endpoints if environment has 0 external hardware paired yet
-# (allows instant testing of the sonar pulse and Android connection interface)
-DEFAULT_SEED_ENDPOINTS = [
-    {
-        "id": "seed-phone-android",
-        "name": "Android Vision Cam (OptiCore Mobile)",
-        "endpoint_category": "app_user",
-        "connection_mode": "wifi",
-        "status": "online",
-        "address": "192.168.1.142",
-        "signal_strength": -42,
-        "capabilities": ["camera", "public_access"],
-        "camera_status": "shared_public",
-        "camera_label": "Rear Camera (1080p)",
-        "user_name": "Field Operative (Android)",
-        "stream_url": None,
-        "is_app_user": True,
-        "is_tts_sink": False,
-        "resolution": "1920x1080",
-    },
-    {
-        "id": "seed-earbuds-bt",
-        "name": "OptiCore Smart Earbuds",
-        "endpoint_category": "earbuds",
-        "connection_mode": "bluetooth",
-        "status": "available",
-        "address": "7C:9A:1D:44:A2:89",
-        "signal_strength": -56,
-        "capabilities": ["audio_out", "tts"],
-        "camera_status": None,
-        "camera_label": None,
-        "user_name": None,
-        "stream_url": None,
-        "is_app_user": False,
-        "is_tts_sink": True,
-        "resolution": None,
-    },
-    {
-        "id": "seed-pi-node",
-        "name": "Raspberry Pi Edge AI Node",
-        "endpoint_category": "device",
-        "connection_mode": "wifi",
-        "status": "online",
-        "address": "192.168.1.108",
-        "signal_strength": -50,
-        "capabilities": ["camera", "compute"],
-        "camera_status": "available",
-        "camera_label": "Pi Wide Lens V3",
-        "user_name": None,
-        "stream_url": None,
-        "is_app_user": False,
-        "is_tts_sink": False,
-        "resolution": "1280x720",
-    }
-]
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -128,8 +74,8 @@ class ConnectivityScanResponse(BaseModel):
 
 
 class ShareCameraRequest(BaseModel):
-    user_name: str = Field(default="Mobile User", max_length=100)
-    device_name: str = Field(default="Android Device", max_length=100)
+    user_name: str = Field(default="OptiCore Operator", max_length=100)
+    device_name: str = Field(default="Mobile Terminal", max_length=100)
     camera_facing: str = Field(default="rear")  # 'front' | 'rear'
     is_public: bool = Field(default=True)
     stream_url: Optional[str] = None
@@ -148,15 +94,132 @@ class ConnectEndpointRequest(BaseModel):
     action: Optional[str] = "connect"  # 'connect' | 'disconnect' | 'request_camera'
 
 
-# ── Helper functions ──────────────────────────────────────────────────────────
+# ── System Device Discovery (100% Real Hardware Probing) ──────────────────────
 
 def _classify_bt_sink_type(name: str) -> str:
+    """Classify Bluetooth device category from hardware identifier."""
     n = name.lower()
-    if any(k in n for k in ["earbud", "airpod", "bud", "pod", "wh-", "wf-", "headphone"]):
+    if any(k in n for k in ["earbud", "airpod", "airdopes", "bud", "pod", "wh-", "wf-", "headphone", "headset"]):
         return "earbuds"
-    if any(k in n for k in ["speaker", "soundbar", "boom", "jbl", "bose"]):
+    if any(k in n for k in ["speaker", "soundbar", "boom", "jbl", "bose", "audio adapter"]):
         return "speaker"
-    return "earbuds"
+    if any(k in n for k in ["phone", "galaxy", "pixel", "iphone", "oneplus", "xiaomi", "redmi"]):
+        return "app_user"
+    return "device"
+
+
+def _get_system_bluetooth_devices() -> List[Dict[str, Any]]:
+    """Query OS for real, physically present/paired Bluetooth devices without mock data."""
+    system = platform.system()
+    devices = []
+    seen = set()
+
+    if system == "Windows":
+        try:
+            cmd = [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                "Get-PnpDevice -Class Bluetooth -PresentOnly -ErrorAction SilentlyContinue | Where-Object { $_.InstanceId -like 'BTHENUM\\DEV_*' -or $_.InstanceId -like 'BTHLE\\DEV_*' } | Select-Object FriendlyName, InstanceId, Status | ConvertTo-Json"
+            ]
+            out = subprocess.check_output(cmd, timeout=3, stderr=subprocess.DEVNULL).decode("utf-8", errors="replace").strip()
+            if out:
+                data = json.loads(out)
+                if isinstance(data, dict):
+                    data = [data]
+                for item in data:
+                    name = (item.get("FriendlyName") or "").strip()
+                    # Filter internal OS driver stubs
+                    if not name or any(ign in name.lower() for ign in [
+                        "generic access profile",
+                        "generic attribute profile",
+                        "bluetooth device",
+                        "avrcp transport",
+                        "service",
+                        "enumerator",
+                    ]):
+                        continue
+
+                    iid = item.get("InstanceId") or ""
+                    m = re.search(r"DEV_([0-9A-Fa-f]{12})", iid)
+                    addr = ":".join([m.group(1)[i:i+2] for i in range(0, 12, 2)]) if m else iid
+
+                    if addr in seen or name in seen:
+                        continue
+                    seen.add(addr)
+                    seen.add(name)
+
+                    status_val = "connected" if item.get("Status") == "OK" else "available"
+                    devices.append({
+                        "name": name,
+                        "address": addr,
+                        "status": status_val,
+                    })
+        except Exception as exc:
+            logger.debug("Windows Bluetooth enumeration error: %s", exc)
+
+    elif system == "Linux":
+        try:
+            out = subprocess.check_output(["bluetoothctl", "devices"], timeout=2, stderr=subprocess.DEVNULL).decode()
+            for line in out.strip().split("\n"):
+                parts = line.split(" ", 2)
+                if len(parts) >= 3 and parts[0] == "Device":
+                    addr = parts[1]
+                    name = parts[2].strip()
+                    if addr not in seen:
+                        seen.add(addr)
+                        devices.append({
+                            "name": name,
+                            "address": addr,
+                            "status": "available",
+                        })
+        except Exception:
+            pass
+
+    return devices
+
+
+def _get_active_audio_sink() -> Optional[Dict[str, str]]:
+    """Detect real active audio output sink (e.g. connected Bluetooth headphones/earbuds/speakers)."""
+    system = platform.system()
+    if system == "Windows":
+        try:
+            cmd = [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                "Get-PnpDevice -Class AudioEndpoint -PresentOnly -ErrorAction SilentlyContinue | Select-Object FriendlyName, Status | ConvertTo-Json"
+            ]
+            out = subprocess.check_output(cmd, timeout=3, stderr=subprocess.DEVNULL).decode("utf-8", errors="replace").strip()
+            if out:
+                data = json.loads(out)
+                if isinstance(data, dict):
+                    data = [data]
+
+                # Check for active Bluetooth earbuds or headphones
+                for item in data:
+                    name = (item.get("FriendlyName") or "").strip()
+                    if item.get("Status") == "OK" and any(k in name.lower() for k in ["airdopes", "earbud", "airpod", "headphone", "headset", "bud"]):
+                        m = re.search(r"\((.+?)\)", name)
+                        clean_name = m.group(1).strip() if m else name
+                        return {"name": clean_name, "sink_type": "earbuds"}
+
+                # Check for Bluetooth speaker
+                for item in data:
+                    name = (item.get("FriendlyName") or "").strip()
+                    if item.get("Status") == "OK" and any(k in name.lower() for k in ["speaker", "soundbar", "jbl", "bose"]):
+                        m = re.search(r"\((.+?)\)", name)
+                        clean_name = m.group(1).strip() if m else name
+                        return {"name": clean_name, "sink_type": "speaker"}
+
+                # Check for default system speakers
+                for item in data:
+                    name = (item.get("FriendlyName") or "").strip()
+                    if item.get("Status") == "OK" and "speaker" in name.lower():
+                        return {"name": name, "sink_type": "system"}
+        except Exception:
+            pass
+    return None
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -165,12 +228,12 @@ def _classify_bt_sink_type(name: str) -> str:
 def scan_all_endpoints(db: Session = Depends(get_db)):
     """Sonar pulse scan endpoint.
 
-    Gathers all Optical Endpoints in one pass:
-    1. Host Wi-Fi & USB & Bluetooth state
-    2. Local USB cameras
-    3. Wi-Fi devices & Raspberry Pi nodes
-    4. App Users sharing their mobile/web cameras
-    5. Bluetooth audio devices (earbuds / speakers for TTS)
+    Gathers all 100% genuine Optical Endpoints:
+    1. Real host Wi-Fi, USB, and Bluetooth adapter state
+    2. Real local USB / integrated cameras discovered on host
+    3. Real registered App Users sharing their camera feed
+    4. Real physical Bluetooth devices & earbuds paired to the host
+    5. Real active audio TTS route
     """
     wifi_info = _get_wifi_info()
     usb_count = _get_usb_device_count()
@@ -189,7 +252,7 @@ def scan_all_endpoints(db: Session = Depends(get_db)):
     endpoints: List[OpticalEndpoint] = []
     seen_ids = set()
 
-    # 1. Registered App Users sharing their cameras (Mobile / Web)
+    # 1. Registered App Users actively sharing their cameras (Mobile / Web)
     for ep_id, ep_data in SHARED_APP_CAMERAS.items():
         ep = OpticalEndpoint(
             id=ep_id,
@@ -211,7 +274,7 @@ def scan_all_endpoints(db: Session = Depends(get_db)):
         endpoints.append(ep)
         seen_ids.add(ep_id)
 
-    # 2. Local / USB Cameras enumerated via OpenCV
+    # 2. Local / USB Cameras enumerated via OpenCV on host
     try:
         raw_cameras = _enumerate_cameras()
         for idx, cam in enumerate(raw_cameras):
@@ -221,7 +284,7 @@ def scan_all_endpoints(db: Session = Depends(get_db)):
                 id=cam_id,
                 name=cam.get("name") or ("USB Optical Camera" if is_usb else "Integrated Vision Camera"),
                 endpoint_category="camera",
-                connection_mode="usb" if is_usb else "usb",
+                connection_mode="usb",
                 status="connected",
                 address=f"USB-CAM-{idx}",
                 signal_strength=None,
@@ -239,7 +302,84 @@ def scan_all_endpoints(db: Session = Depends(get_db)):
     except Exception as exc:
         logger.warning(f"Error enumerating cameras for unified scan: {exc}")
 
-    # 3. Wi-Fi Devices from database
+    # 3. Real System Bluetooth devices from OS
+    real_bt_devices = _get_system_bluetooth_devices()
+    active_bt_sink: Optional[Dict[str, str]] = None
+
+    for dev in real_bt_devices:
+        dev_id = f"bt-{dev['address'].replace(':', '').lower()}"
+        if dev_id in seen_ids or dev["address"] in seen_ids:
+            continue
+
+        sink_type = _classify_bt_sink_type(dev["name"])
+        is_sink = sink_type in ("earbuds", "speaker")
+        is_connected = dev["status"] == "connected"
+
+        if is_sink and is_connected and not active_bt_sink:
+            active_bt_sink = {
+                "name": dev["name"],
+                "address": dev["address"],
+                "sink_type": sink_type,
+            }
+
+        endpoints.append(OpticalEndpoint(
+            id=dev_id,
+            name=dev["name"],
+            endpoint_category=sink_type,
+            connection_mode="bluetooth",
+            status=dev["status"],
+            address=dev["address"],
+            signal_strength=None,
+            capabilities=["audio_out", "tts"] if is_sink else ["peripheral"],
+            camera_status=None,
+            camera_label=None,
+            user_name=dev["name"] if sink_type == "app_user" else None,
+            stream_url=None,
+            is_app_user=(sink_type == "app_user"),
+            is_tts_sink=is_sink,
+            resolution=None,
+        ))
+        seen_ids.add(dev_id)
+        seen_ids.add(dev["address"])
+
+    # 4. Bluetooth Devices from database (if any extra were saved)
+    try:
+        bt_db_devices = db.query(BluetoothDevice).all()
+        for bd in bt_db_devices:
+            if bd.id not in seen_ids and bd.address not in seen_ids:
+                sink_type = _classify_bt_sink_type(bd.name)
+                is_sink = sink_type in ("earbuds", "speaker")
+                is_connected = bd.status == "connected"
+                if is_sink and is_connected and not active_bt_sink:
+                    active_bt_sink = {
+                        "name": bd.name,
+                        "address": bd.address,
+                        "sink_type": sink_type,
+                    }
+
+                endpoints.append(OpticalEndpoint(
+                    id=bd.id or bd.address,
+                    name=bd.name,
+                    endpoint_category=sink_type,
+                    connection_mode="bluetooth",
+                    status=bd.status or "available",
+                    address=bd.address,
+                    signal_strength=bd.signal_strength,
+                    capabilities=["audio_out", "tts"] if is_sink else ["peripheral"],
+                    camera_status=None,
+                    camera_label=None,
+                    user_name=None,
+                    stream_url=None,
+                    is_app_user=False,
+                    is_tts_sink=is_sink,
+                    resolution=None,
+                ))
+                seen_ids.add(bd.id)
+                seen_ids.add(bd.address)
+    except Exception as exc:
+        logger.warning(f"Error querying bluetooth_devices: {exc}")
+
+    # 5. Wi-Fi Devices from database (Raspberry Pi or external nodes if registered)
     try:
         wifi_db_devices = db.query(WiFiDevice).all()
         for wd in wifi_db_devices:
@@ -259,7 +399,7 @@ def scan_all_endpoints(db: Session = Depends(get_db)):
                     connection_mode="wifi",
                     status=wd.status or "online",
                     address=wd.ip_address,
-                    signal_strength=-45,
+                    signal_strength=None,
                     capabilities=["camera" if category in ("camera", "app_user") else "compute"],
                     camera_status="available" if category in ("camera", "app_user") else None,
                     camera_label=f"{wd.device_type} Endpoint",
@@ -273,72 +413,36 @@ def scan_all_endpoints(db: Session = Depends(get_db)):
     except Exception as exc:
         logger.warning(f"Error querying wifi_devices: {exc}")
 
-    # 4. Bluetooth Devices from database
-    active_tts_device: Optional[BluetoothDevice] = None
-    try:
-        bt_db_devices = db.query(BluetoothDevice).all()
-        for bd in bt_db_devices:
-            if bd.id not in seen_ids and bd.address not in seen_ids:
-                sink_type = _classify_bt_sink_type(bd.name)
-                is_connected = bd.status == "connected"
-                if is_connected and not active_tts_device:
-                    active_tts_device = bd
-
-                endpoints.append(OpticalEndpoint(
-                    id=bd.id or bd.address,
-                    name=bd.name,
-                    endpoint_category=sink_type,
-                    connection_mode="bluetooth",
-                    status=bd.status or "available",
-                    address=bd.address,
-                    signal_strength=bd.signal_strength,
-                    capabilities=["audio_out", "tts"],
-                    camera_status=None,
-                    camera_label=None,
-                    user_name=None,
-                    stream_url=None,
-                    is_app_user=False,
-                    is_tts_sink=True,
-                    resolution=None,
-                ))
-                seen_ids.add(bd.id)
-                seen_ids.add(bd.address)
-    except Exception as exc:
-        logger.warning(f"Error querying bluetooth_devices: {exc}")
-
-    # 5. Fallback demo endpoints if nothing is discovered yet
-    # Ensures sonar pulse view displays rich interactive cards immediately
-    if len(endpoints) <= 1:
-        for seed in DEFAULT_SEED_ENDPOINTS:
-            if seed["id"] not in seen_ids:
-                endpoints.append(OpticalEndpoint(**seed))
-                seen_ids.add(seed["id"])
-
-    # TTS Route Info
-    if active_tts_device:
+    # 6. TTS Audio Route Detection
+    detected_audio_sink = _get_active_audio_sink()
+    if detected_audio_sink and detected_audio_sink["sink_type"] in ("earbuds", "speaker"):
         tts_info = TTSRouteInfo(
             active=True,
-            routed_to=active_tts_device.name,
-            device_address=active_tts_device.address,
-            sink_type=_classify_bt_sink_type(active_tts_device.name),
+            routed_to=detected_audio_sink["name"],
+            device_address=active_bt_sink.get("address") if active_bt_sink else None,
+            sink_type=detected_audio_sink["sink_type"],
+        )
+    elif active_bt_sink:
+        tts_info = TTSRouteInfo(
+            active=True,
+            routed_to=active_bt_sink["name"],
+            device_address=active_bt_sink["address"],
+            sink_type=active_bt_sink["sink_type"],
+        )
+    elif detected_audio_sink:
+        tts_info = TTSRouteInfo(
+            active=False,
+            routed_to=detected_audio_sink["name"],
+            device_address=None,
+            sink_type="system",
         )
     else:
-        # Check if any seed earbuds is connected
-        connected_seed = next((ep for ep in endpoints if ep.is_tts_sink and ep.status == "connected"), None)
-        if connected_seed:
-            tts_info = TTSRouteInfo(
-                active=True,
-                routed_to=connected_seed.name,
-                device_address=connected_seed.address,
-                sink_type=connected_seed.endpoint_category,
-            )
-        else:
-            tts_info = TTSRouteInfo(
-                active=False,
-                routed_to="System Audio (Default)",
-                device_address=None,
-                sink_type="system",
-            )
+        tts_info = TTSRouteInfo(
+            active=False,
+            routed_to="System Audio (Default)",
+            device_address=None,
+            sink_type="system",
+        )
 
     return ConnectivityScanResponse(
         scan_timestamp=datetime.utcnow().isoformat(),
@@ -351,11 +455,13 @@ def scan_all_endpoints(db: Session = Depends(get_db)):
 @router.post("/share-camera", response_model=ShareCameraResponse)
 def share_camera_endpoint(
     req: ShareCameraRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """Enable an App User (Android, iOS, or Web) to publish their camera as an Optical Endpoint."""
     endpoint_id = f"app-cam-{uuid.uuid4().hex[:8]}"
     camera_name = f"{req.user_name}'s {req.device_name} ({req.camera_facing.capitalize()})"
+    client_ip = request.client.host if request.client else "127.0.0.1"
 
     camera_entry = {
         "id": endpoint_id,
@@ -368,13 +474,13 @@ def share_camera_endpoint(
         "stream_url": req.stream_url,
         "status": "online",
         "resolution": req.resolution,
+        "ip_address": client_ip,
         "created_at": datetime.utcnow().isoformat(),
     }
     SHARED_APP_CAMERAS[endpoint_id] = camera_entry
 
     # Also register in camera_sources so that ModelPage can stream from it
     try:
-        # Check if dummy host device exists
         host_device = db.query(Device).first()
         dev_id = host_device.id if host_device else str(uuid.uuid4())
 
@@ -399,8 +505,8 @@ def share_camera_endpoint(
         endpoint_category="app_user",
         connection_mode="wifi",
         status="online",
-        address="192.168.1.155",
-        signal_strength=-38,
+        address=client_ip,
+        signal_strength=None,
         capabilities=["camera", "public_access" if req.is_public else "auth_access"],
         camera_status="shared_public" if req.is_public else "pending",
         camera_label=camera_entry["camera_label"],
@@ -446,7 +552,7 @@ def connect_optical_endpoint(
     Handles:
     - App User: Enables access to user's shared camera
     - Bluetooth: Pairs/connects earbuds or speaker, and binds TTS audio route
-    - USB / Wi-Fi: Activates camera pipeline
+    - USB / Camera: Activates camera pipeline
     """
     # 1. Check if it's an App User camera share
     if endpoint_id in SHARED_APP_CAMERAS:
@@ -461,27 +567,7 @@ def connect_optical_endpoint(
             "stream_url": entry.get("stream_url"),
         }
 
-    # 2. Check if it's a seed endpoint
-    for seed in DEFAULT_SEED_ENDPOINTS:
-        if seed["id"] == endpoint_id:
-            seed["status"] = "connected"
-            if seed.get("is_tts_sink"):
-                return {
-                    "status": "connected",
-                    "endpoint_id": endpoint_id,
-                    "type": seed["endpoint_category"],
-                    "tts_routed": True,
-                    "message": f"Connected to {seed['name']}. Speech TTS will now output to these earbuds.",
-                }
-            return {
-                "status": "connected",
-                "endpoint_id": endpoint_id,
-                "type": seed["endpoint_category"],
-                "camera_access": "approved",
-                "message": f"Connected to {seed['name']}. Optical stream ready.",
-            }
-
-    # 3. Check Bluetooth database
+    # 2. Check Bluetooth database
     bt_dev = db.query(BluetoothDevice).filter(
         (BluetoothDevice.id == endpoint_id) | (BluetoothDevice.address == endpoint_id)
     ).first()
@@ -496,7 +582,7 @@ def connect_optical_endpoint(
             "message": f"Connected to {bt_dev.name}. AI audio detections routed to earbuds.",
         }
 
-    # 4. Check CameraSource database
+    # 3. Check CameraSource database
     cam = db.query(CameraSource).filter(CameraSource.id == endpoint_id).first()
     if cam:
         cam.status = "connected"
@@ -510,11 +596,12 @@ def connect_optical_endpoint(
             "message": f"Camera source '{cam.name}' activated.",
         }
 
+    # 4. Connected system Bluetooth device
     return {
         "status": "connected",
         "endpoint_id": endpoint_id,
         "type": "optical_endpoint",
-        "message": "Endpoint connected successfully.",
+        "message": f"Optical endpoint '{endpoint_id}' connected successfully.",
     }
 
 

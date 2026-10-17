@@ -109,12 +109,27 @@ const DashboardScreen = () => (
 );
 
 const DevicesScreen = () => {
-  const [meshEndpoints, setMeshEndpoints] = useState([
-    { id: '1', name: 'OptiCore Pi — Living Room', mode: 'Wi-Fi', type: 'device', status: 'online', details: '192.168.1.108 · Node' },
-    { id: '2', name: 'OptiCore Wireless Earbuds', mode: 'Bluetooth', type: 'earbuds', status: 'connected', details: 'TTS Audio Output Active' },
-    { id: '3', name: 'Field Operative (Android)', mode: 'Wi-Fi', type: 'app_user', status: 'online', details: 'Camera Shared · Public' },
-    { id: '4', name: 'USB HD Optical Cam', mode: 'USB', type: 'camera', status: 'connected', details: '1080p @ 30fps' }
-  ]);
+  const [meshEndpoints, setMeshEndpoints] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetchEndpoints = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('http://10.0.2.2:8000/api/connectivity/scan');
+      if (res.ok) {
+        const data = await res.json();
+        setMeshEndpoints(data.endpoints || []);
+      }
+    } catch {
+      // Network offline, keep genuine state
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchEndpoints();
+  }, []);
 
   return (
     <ScrollView style={styles.container}>
@@ -123,40 +138,55 @@ const DevicesScreen = () => {
           <Text style={styles.pageTitle}>Optical Mesh</Text>
           <Text style={styles.pageSubtitle}>Sonar Endpoints (Wi-Fi · BT · USB)</Text>
         </View>
-        <TouchableOpacity style={styles.btnPrimary}>
-          <Text style={styles.btnPrimaryText}>Ping Sonar</Text>
+        <TouchableOpacity style={styles.btnPrimary} onPress={fetchEndpoints} disabled={loading}>
+          <Text style={styles.btnPrimaryText}>{loading ? 'Scanning…' : 'Ping Sonar'}</Text>
         </TouchableOpacity>
       </View>
 
-      {meshEndpoints.map(d => (
-        <View key={d.id} style={styles.card}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Text style={{ fontSize: 16, fontWeight: '600', color: theme.textDark }}>{d.name}</Text>
-            </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme.bg, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 }}>
-              <View style={[styles.statusIndicator, d.status === 'online' || d.status === 'connected' ? { backgroundColor: theme.success } : { backgroundColor: theme.warning }]} />
-              <Text style={{ fontSize: 11, fontWeight: '600', color: theme.textDark }}>{d.mode}</Text>
-            </View>
-          </View>
-          <Text style={{ marginTop: 8, color: theme.textSecondary, fontSize: 13 }}>{d.details}</Text>
-          <View style={{ flexDirection: 'row', marginTop: 14, gap: 10 }}>
-            {d.type === 'app_user' || d.type === 'camera' ? (
-              <TouchableOpacity style={[styles.btnPrimary, { flex: 1, backgroundColor: theme.primary }]}>
-                <Text style={[styles.btnPrimaryText, { textAlign: 'center' }]}>View Camera</Text>
-              </TouchableOpacity>
-            ) : d.type === 'earbuds' ? (
-              <TouchableOpacity style={[styles.btnPrimary, { flex: 1, backgroundColor: '#60A5FA' }]}>
-                <Text style={[styles.btnPrimaryText, { textAlign: 'center' }]}>🔊 TTS Active</Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity style={[styles.btnSecondary, { flex: 1 }]}>
-                <Text style={styles.btnSecondaryText}>Connect Node</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+      {meshEndpoints.length === 0 ? (
+        <View style={[styles.card, { alignItems: 'center', paddingVertical: 36 }]}>
+          <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textDark, marginBottom: 6 }}>
+            No Endpoints Detected
+          </Text>
+          <Text style={{ fontSize: 12, color: theme.textSecondary, textAlign: 'center' }}>
+            Tap "Ping Sonar" to discover active optical devices, Bluetooth sinks, or live App Users.
+          </Text>
         </View>
-      ))}
+      ) : (
+        meshEndpoints.map(d => (
+          <View key={d.id} style={styles.card}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={{ fontSize: 16, fontWeight: '600', color: theme.textDark }}>{d.name}</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme.bg, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 }}>
+                <View style={[styles.statusIndicator, d.status === 'online' || d.status === 'connected' ? { backgroundColor: theme.success } : { backgroundColor: theme.warning }]} />
+                <Text style={{ fontSize: 11, fontWeight: '600', color: theme.textDark, textTransform: 'uppercase' }}>
+                  {d.connection_mode || d.mode}
+                </Text>
+              </View>
+            </View>
+            <Text style={{ marginTop: 8, color: theme.textSecondary, fontSize: 13 }}>
+              {d.address || d.camera_label || (d.is_tts_sink ? 'TTS Audio Sink' : 'Optical Endpoint')}
+            </Text>
+            <View style={{ flexDirection: 'row', marginTop: 14, gap: 10 }}>
+              {d.capabilities?.includes('camera') || d.endpoint_category === 'camera' || d.is_app_user ? (
+                <TouchableOpacity style={[styles.btnPrimary, { flex: 1, backgroundColor: theme.primary }]}>
+                  <Text style={[styles.btnPrimaryText, { textAlign: 'center' }]}>View Camera</Text>
+                </TouchableOpacity>
+              ) : d.is_tts_sink || d.endpoint_category === 'earbuds' ? (
+                <TouchableOpacity style={[styles.btnPrimary, { flex: 1, backgroundColor: '#60A5FA' }]}>
+                  <Text style={[styles.btnPrimaryText, { textAlign: 'center' }]}>🔊 TTS Active</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity style={[styles.btnSecondary, { flex: 1 }]}>
+                  <Text style={styles.btnSecondaryText}>Connect Node</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        ))
+      )}
     </ScrollView>
   );
 };

@@ -278,7 +278,7 @@ export function ConnectivityPage({ state, onNavigateToModel, lastWsMessage }: Co
 
   // Camera sharing modal state
   const [showShareModal, setShowShareModal] = useState(false);
-  const [shareUserName, setShareUserName] = useState('Android Vision Host');
+  const [shareUserName, setShareUserName] = useState('My Optical Client');
   const [shareCameraFacing, setShareCameraFacing] = useState<'front' | 'rear'>('rear');
   const [sharePublic, setSharePublic] = useState(true);
   const [mySharedEndpointId, setMySharedEndpointId] = useState<string | null>(null);
@@ -296,50 +296,9 @@ export function ConnectivityPage({ state, onNavigateToModel, lastWsMessage }: Co
       setEndpoints(res.endpoints || []);
       setHostInfo(res.host);
       setTtsRoute(res.tts_route);
-    } catch {
-      // Fallback: build endpoints from basic system props
-      setEndpoints([
-        {
-          id: 'camera_0',
-          name: 'Integrated Optical Camera',
-          endpoint_category: 'camera',
-          connection_mode: 'usb',
-          status: 'connected',
-          address: 'USB-0',
-          capabilities: ['camera'],
-          camera_status: 'available',
-          camera_label: 'Built-in Sensor',
-          is_app_user: false,
-          is_tts_sink: false,
-        },
-        {
-          id: 'android_opti_peer',
-          name: "Field Operative (Android)",
-          endpoint_category: 'app_user',
-          connection_mode: 'wifi',
-          status: 'online',
-          address: '192.168.1.142',
-          signal_strength: -42,
-          capabilities: ['camera', 'public_access'],
-          camera_status: 'shared_public',
-          camera_label: 'Rear Camera (1080p)',
-          user_name: 'Android User',
-          is_app_user: true,
-          is_tts_sink: false,
-        },
-        {
-          id: 'bt_buds_1',
-          name: 'OptiCore Wireless Earbuds',
-          endpoint_category: 'earbuds',
-          connection_mode: 'bluetooth',
-          status: 'available',
-          address: '7C:9A:1D:44:A2:89',
-          signal_strength: -56,
-          capabilities: ['audio_out', 'tts'],
-          is_app_user: false,
-          is_tts_sink: true,
-        },
-      ]);
+    } catch (err: any) {
+      console.warn('Unified connectivity scan failed:', err);
+      // No dummy data — preserve real state or display accurate empty list
     } finally {
       setTimeout(() => setScanning(false), 600);
     }

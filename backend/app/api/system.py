@@ -170,8 +170,8 @@ def _get_bluetooth_adapter_available() -> bool:
 def _enumerate_cameras() -> list:
     """Probe VideoCapture indices safely to discover real hardware cameras without logging errors."""
     cameras = []
+    system = platform.system()
     try:
-        system = platform.system()
         # In Linux/Docker, check if /dev/video* devices exist before calling OpenCV
         if system == "Linux":
             import glob
@@ -216,7 +216,39 @@ def _enumerate_cameras() -> list:
                 "status": "connected",
             })
     except Exception as exc:
-        logger.debug("Camera enumeration failed: %s", exc)
+        logger.debug("OpenCV camera enumeration failed: %s", exc)
+
+    # OS-level hardware discovery if OpenCV is headless / not installed
+    if not cameras and system == "Windows":
+        try:
+            cmd = [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                "Get-PnpDevice -Class Camera -PresentOnly -ErrorAction SilentlyContinue | Select-Object FriendlyName, InstanceId, Status | ConvertTo-Json"
+            ]
+            out = subprocess.check_output(cmd, timeout=3, stderr=subprocess.DEVNULL).decode("utf-8", errors="replace").strip()
+            if out:
+                import json
+                data = json.loads(out)
+                if isinstance(data, dict):
+                    data = [data]
+                for idx, item in enumerate(data):
+                    name = item.get("FriendlyName") or f"Camera {idx}"
+                    iid = item.get("InstanceId") or ""
+                    is_usb = "USB" in iid.upper()
+                    cameras.append({
+                        "id": f"camera_{idx}",
+                        "device_id": "local",
+                        "name": name,
+                        "source_type": "usb" if is_usb else "local",
+                        "resolution": "1080p",
+                        "fps": 30,
+                        "status": "connected" if item.get("Status") == "OK" else "available",
+                    })
+        except Exception as exc:
+            logger.debug("Windows PnP camera discovery error: %s", exc)
+
     return cameras
 
 
