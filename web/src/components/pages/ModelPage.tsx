@@ -684,6 +684,7 @@ export function ModelPage({
             selectedDetectionId={selectedDetectionId}
             onSelectDetection={setSelectedDetectionId}
             onCameraReady={onCameraChange}
+            selectedCameraId={preSelectedCameraId}
             resolution={
               activeTab === 'live'
                 ? cameras.find((c) => c.id === selectedCamera)?.resolution ?? '1280x720'

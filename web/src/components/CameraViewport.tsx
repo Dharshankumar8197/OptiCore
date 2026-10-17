@@ -33,6 +33,7 @@ interface CameraViewportProps {
   selectedDetectionId?: string | null;
   onSelectDetection?: (id: string | null) => void;
   onCameraReady?: (ready: boolean) => void;
+  selectedCameraId?: string | null;
 }
 
 // Class color palette for rich cyber-vision aesthetics
@@ -66,80 +67,155 @@ export const CameraViewport = forwardRef<CameraViewportRef, CameraViewportProps>
     selectedDetectionId,
     onSelectDetection,
     onCameraReady,
+    selectedCameraId,
   },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [camError, setCamError] = useState<string | null>(null);
   const [requesting, setRequesting] = useState(false);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [availableDevices, setAvailableDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
+  const [activeCameraLabel, setActiveCameraLabel] = useState<string>('');
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  /* Cleanly stop all tracks of any active stream */
+  const stopStream = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch {
+          /* ignore */
+        }
+      });
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setStream(null);
+  }, []);
 
   /* List available video devices */
   const enumerateCameras = useCallback(async () => {
     try {
-      if (!navigator.mediaDevices?.enumerateDevices) return;
+      if (!navigator.mediaDevices?.enumerateDevices) return [];
       const devices = await navigator.mediaDevices.enumerateDevices();
       const videoInputs = devices.filter((d) => d.kind === 'videoinput');
       setAvailableDevices(videoInputs);
+      return videoInputs;
     } catch {
-      /* ignore */
+      return [];
     }
   }, []);
 
-  /* Request browser camera stream */
-  const requestCamera = useCallback(async () => {
-    if (mode !== 'live') return;
-    setRequesting(true);
-    setCamError(null);
+  /* Request browser camera stream with reliable device selection */
+  const startCamera = useCallback(
+    async (deviceIdToUse?: string, facingToUse?: 'user' | 'environment') => {
+      if (mode !== 'live') return;
+      setRequesting(true);
+      setCamError(null);
 
-    // Stop existing stream tracks
-    if (stream) {
-      stream.getTracks().forEach((t) => t.stop());
-      setStream(null);
-    }
+      // Stop previous stream
+      stopStream();
 
-    try {
-      const constraints: MediaStreamConstraints = {
-        video: selectedDeviceId
-          ? { deviceId: { exact: selectedDeviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }
-          : { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false,
-      };
+      const devId = deviceIdToUse !== undefined ? deviceIdToUse : selectedDeviceId;
+      const facing = facingToUse !== undefined ? facingToUse : facingMode;
 
-      const newStream = await navigator.mediaDevices.getUserMedia(constraints);
-      setStream(newStream);
-      setRequesting(false);
-      onCameraReady?.(true);
-      enumerateCameras();
-    } catch (err: any) {
-      setCamError(err?.message ?? 'Camera access was denied or not found');
-      setRequesting(false);
-      onCameraReady?.(false);
-    }
-  }, [mode, selectedDeviceId, facingMode, enumerateCameras, onCameraReady]);
+      try {
+        let newStream: MediaStream;
+        const constraints: MediaStreamConstraints = {
+          audio: false,
+          video: devId
+            ? { deviceId: { ideal: devId }, width: { ideal: 1280 }, height: { ideal: 720 } }
+            : { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 } },
+        };
 
+        try {
+          newStream = await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (constraintErr) {
+          console.warn('Constrained camera request failed, attempting basic fallback:', constraintErr);
+          newStream = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: devId ? { deviceId: devId } : true,
+          });
+        }
+
+        streamRef.current = newStream;
+        setStream(newStream);
+        setRequesting(false);
+        setCamError(null);
+        onCameraReady?.(true);
+
+        const videoTrack = newStream.getVideoTracks()[0];
+        const label = videoTrack?.label || (facing === 'user' ? 'Front Lens' : 'Rear Lens');
+        setActiveCameraLabel(label);
+
+        // Bind stream to video element and play
+        if (videoRef.current) {
+          videoRef.current.srcObject = newStream;
+          videoRef.current.play().catch((playErr) => {
+            console.warn('video.play() auto-playback error:', playErr);
+          });
+        }
+
+        // Re-enumerate to get real device names now that permission is granted
+        const updatedDevices = await enumerateCameras();
+        if (updatedDevices && updatedDevices.length > 0 && !devId && videoTrack) {
+          const matched = updatedDevices.find((d) => d.label === videoTrack.label);
+          if (matched) {
+            setSelectedDeviceId(matched.deviceId);
+          }
+        }
+      } catch (err: any) {
+        console.error('Camera request error:', err);
+        setCamError(err?.message ?? 'Camera access was denied or not found');
+        setRequesting(false);
+        onCameraReady?.(false);
+      }
+    },
+    [mode, selectedDeviceId, facingMode, stopStream, onCameraReady, enumerateCameras],
+  );
+
+  /* Initial mount: start camera */
   useEffect(() => {
-    if (mode === 'live' && !stream && !camError && !requesting) {
-      requestCamera();
+    enumerateCameras();
+    if (mode === 'live') {
+      startCamera();
     }
     return () => {
-      if (stream) {
-        stream.getTracks().forEach((t) => t.stop());
-      }
+      stopStream();
     };
-  }, [mode, requestCamera]);
+  }, [mode]);
 
+  /* Handle external pre-selected camera prop */
   useEffect(() => {
-    if (videoRef.current && stream) {
-      videoRef.current.srcObject = stream;
+    if (selectedCameraId && selectedCameraId !== selectedDeviceId) {
+      setSelectedDeviceId(selectedCameraId);
+      startCamera(selectedCameraId, facingMode);
     }
-  }, [stream]);
+  }, [selectedCameraId]);
+
+  /* Handle manual camera device selection from dropdown */
+  const handleSelectCameraDevice = (newDeviceId: string) => {
+    setSelectedDeviceId(newDeviceId);
+    startCamera(newDeviceId, facingMode);
+  };
+
+  /* Toggle Front/Back camera lens */
+  const switchCamera = useCallback(() => {
+    const nextFacing = facingMode === 'user' ? 'environment' : 'user';
+    setFacingMode(nextFacing);
+    setSelectedDeviceId('');
+    startCamera('', nextFacing);
+  }, [facingMode, startCamera]);
 
   /* Capture frame to Base64 JPEG string */
   const captureFrame = useCallback((): string | null => {
@@ -163,12 +239,6 @@ export const CameraViewport = forwardRef<CameraViewportRef, CameraViewportProps>
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     return canvas.toDataURL('image/jpeg', 0.85);
   }, [mode, imageUrl]);
-
-  /* Toggle Front/Back camera */
-  const switchCamera = useCallback(() => {
-    setFacingMode((prev) => (prev === 'user' ? 'environment' : 'user'));
-    setSelectedDeviceId('');
-  }, []);
 
   /* Expose ref functions */
   useImperativeHandle(ref, () => ({
@@ -204,23 +274,28 @@ export const CameraViewport = forwardRef<CameraViewportRef, CameraViewportProps>
     >
       {/* ── Background Media: Live Video or Uploaded Image ──────────────── */}
       {mode === 'live' ? (
-        hasFeed ? (
+        <>
           <video
             ref={videoRef}
             autoPlay
             playsInline
             muted
+            onLoadedMetadata={() => {
+              videoRef.current?.play().catch(() => {});
+            }}
             style={{
               position: 'absolute',
               inset: 0,
               width: '100%',
               height: '100%',
               objectFit: 'cover',
+              display: hasFeed ? 'block' : 'none',
             }}
           />
-        ) : (
-          <OfflineState error={camError} requesting={requesting} onConnect={requestCamera} />
-        )
+          {!hasFeed && (
+            <OfflineState error={camError} requesting={requesting} onConnect={() => startCamera()} />
+          )}
+        </>
       ) : imageUrl ? (
         <img
           src={imageUrl}
@@ -350,10 +425,18 @@ export const CameraViewport = forwardRef<CameraViewportRef, CameraViewportProps>
             fontWeight: 500,
             letterSpacing: '0.16em',
             textTransform: 'uppercase',
-            color: 'rgba(255,255,255,0.35)',
+            color: 'rgba(255,255,255,0.45)',
           }}
         >
-          {mode === 'live' ? (facingMode === 'user' ? 'Front Lens' : 'Rear Lens') : 'Static Frame'}
+          {mode === 'live'
+            ? activeCameraLabel
+              ? activeCameraLabel.length > 28
+                ? `${activeCameraLabel.slice(0, 26)}…`
+                : activeCameraLabel
+              : facingMode === 'user'
+              ? 'Front Lens'
+              : 'Rear Lens'
+            : 'Static Frame'}
         </span>
       </div>
 
@@ -369,10 +452,10 @@ export const CameraViewport = forwardRef<CameraViewportRef, CameraViewportProps>
           gap: 8,
         }}
       >
-        {mode === 'live' && availableDevices.length > 1 && (
+        {mode === 'live' && availableDevices.length > 0 && (
           <select
             value={selectedDeviceId}
-            onChange={(e) => setSelectedDeviceId(e.target.value)}
+            onChange={(e) => handleSelectCameraDevice(e.target.value)}
             style={{
               background: 'rgba(6,8,14,0.75)',
               border: '1px solid rgba(255,255,255,0.12)',
@@ -387,7 +470,7 @@ export const CameraViewport = forwardRef<CameraViewportRef, CameraViewportProps>
           >
             <option value="">Default Camera</option>
             {availableDevices.map((d, i) => (
-              <option key={d.deviceId || i} value={d.deviceId}>
+              <option key={d.deviceId || `cam-${i}`} value={d.deviceId}>
                 {d.label || `Camera ${i + 1}`}
               </option>
             ))}
