@@ -8,6 +8,8 @@ build/
 .env
 .env.local
 .env.*.local
+.ngrok_token
+*.token
 
 # Python
 __pycache__/

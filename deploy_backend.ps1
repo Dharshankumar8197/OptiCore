@@ -26,10 +26,56 @@ try {
     exit 1
 }
 
-# Prompt for token if not given
+# Resolve script directory safely
+$scriptDir = $PSScriptRoot
+if ([string]::IsNullOrEmpty($scriptDir) -and $MyInvocation.MyCommand -and $MyInvocation.MyCommand.Path) {
+    $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+}
+if ([string]::IsNullOrEmpty($scriptDir)) {
+    $scriptDir = (Get-Location).Path
+}
+
+# Auto-discover saved Ngrok token if not explicitly passed
+$tokenCacheFile = Join-Path $HOME ".opticore_ngrok_token"
+$localTokenFile = Join-Path $scriptDir ".ngrok_token"
+$backendEnvFile = Join-Path $scriptDir "backend\.env"
+$rootEnvFile = Join-Path $scriptDir ".env"
+
+if ([string]::IsNullOrWhiteSpace($Authtoken)) {
+    if (Test-Path $localTokenFile) {
+        $Authtoken = (Get-Content $localTokenFile -Raw).Trim()
+    } elseif (Test-Path $tokenCacheFile) {
+        $Authtoken = (Get-Content $tokenCacheFile -Raw).Trim()
+    } elseif (Test-Path $backendEnvFile) {
+        $envMatch = Select-String -Path $backendEnvFile -Pattern "^NGROK_AUTHTOKEN=(.+)$" | Select-Object -First 1
+        if ($envMatch) { $Authtoken = $envMatch.Matches[0].Groups[1].Value.Trim() }
+    } elseif (Test-Path $rootEnvFile) {
+        $envMatch = Select-String -Path $rootEnvFile -Pattern "^NGROK_AUTHTOKEN=(.+)$" | Select-Object -First 1
+        if ($envMatch) { $Authtoken = $envMatch.Matches[0].Groups[1].Value.Trim() }
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($Authtoken)) {
+        Write-Host "[+] Loaded saved Ngrok Authtoken: $($Authtoken.Substring(0, [math]::Min(8, $Authtoken.Length)))..." -ForegroundColor Green
+    }
+}
+
+# Prompt only if still not found, and save it permanently
 if ([string]::IsNullOrWhiteSpace($Authtoken)) {
     Write-Host "[?] Enter your Ngrok Authtoken (get one free at https://dashboard.ngrok.com):" -ForegroundColor Yellow
     $Authtoken = Read-Host "Authtoken (press Enter to skip public tunnel)"
+
+    if (-not [string]::IsNullOrWhiteSpace($Authtoken)) {
+        try {
+            Set-Content -Path $tokenCacheFile -Value $Authtoken -Force
+            if (Test-Path $scriptDir) { Set-Content -Path $localTokenFile -Value $Authtoken -Force }
+            Write-Host "[+] Saved Authtoken — you will never be asked again on this system!" -ForegroundColor Green
+        } catch {}
+    }
+} else {
+    try {
+        Set-Content -Path $tokenCacheFile -Value $Authtoken -Force
+        if (Test-Path $scriptDir) { Set-Content -Path $localTokenFile -Value $Authtoken -Force }
+    } catch {}
 }
 
 $ContainerName = "opticore-backend"
@@ -47,14 +93,6 @@ try {
 } catch {}
 
 if (-not $pullSuccess) {
-    $scriptDir = $PSScriptRoot
-    if ([string]::IsNullOrEmpty($scriptDir) -and $MyInvocation.MyCommand -and $MyInvocation.MyCommand.Path) {
-        $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-    }
-    if ([string]::IsNullOrEmpty($scriptDir)) {
-        $scriptDir = (Get-Location).Path
-    }
-
     $dockerfile = Join-Path $scriptDir "backend\Dockerfile.standalone"
     $backendDir = Join-Path $scriptDir "backend"
 

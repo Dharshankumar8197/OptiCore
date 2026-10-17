@@ -41,14 +41,30 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
-# Prompt for Ngrok token if not provided
+# Check saved token cache files if not provided
+TOKEN_CACHE="$HOME/.opticore_ngrok_token"
 if [ -z "$NGROK_TOKEN" ]; then
     if [ -n "$NGROK_AUTHTOKEN" ]; then
         NGROK_TOKEN="$NGROK_AUTHTOKEN"
+    elif [ -f "$TOKEN_CACHE" ]; then
+        NGROK_TOKEN=$(cat "$TOKEN_CACHE" | tr -d ' \r\n')
+        echo -e "${GREEN}[+] Loaded saved Ngrok Authtoken from cache.${NC}"
+    elif [ -f ".ngrok_token" ]; then
+        NGROK_TOKEN=$(cat ".ngrok_token" | tr -d ' \r\n')
+        echo -e "${GREEN}[+] Loaded saved Ngrok Authtoken from local .ngrok_token.${NC}"
+    elif [ -f "backend/.env" ] && grep -q '^NGROK_AUTHTOKEN=' "backend/.env"; then
+        NGROK_TOKEN=$(grep '^NGROK_AUTHTOKEN=' "backend/.env" | cut -d'=' -f2- | tr -d ' \r\n')
+        echo -e "${GREEN}[+] Loaded saved Ngrok Authtoken from backend/.env.${NC}"
     else
         echo -e "${YELLOW}[?] Enter your Ngrok Authtoken (get one free at https://dashboard.ngrok.com/get-started/your-authtoken):${NC}"
         read -r -p "Authtoken (press Enter to skip public tunnel): " NGROK_TOKEN
+        if [ -n "$NGROK_TOKEN" ]; then
+            echo "$NGROK_TOKEN" > "$TOKEN_CACHE" 2>/dev/null || true
+            echo -e "${GREEN}[+] Saved Authtoken — you will never be asked again on this system!${NC}"
+        fi
     fi
+else
+    echo "$NGROK_TOKEN" > "$TOKEN_CACHE" 2>/dev/null || true
 fi
 
 # Check for Docker

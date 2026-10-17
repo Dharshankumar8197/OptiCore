@@ -53,6 +53,17 @@ The Vision Studio web app is built with **Next.js 16** and deploys to **Vercel**
 
 ---
 
+## ⚡ Instant 1-Second Startup (Second Time & Beyond)
+
+Your Ngrok Authtoken is **automatically saved** on first entry, so you never have to type it again. To start or resume the backend anytime:
+
+```powershell
+.\start_backend.ps1
+```
+*Starts the backend in ~1 second, prints your active Ngrok HTTPS URL, and automatically pops open the live inference logs window.*
+
+---
+
 ## 💾 Zero-Config SQLite Database
 
 **No external database server installation required!**
