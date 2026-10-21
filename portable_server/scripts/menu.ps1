@@ -24,13 +24,17 @@ if (-not (Test-Path $envPath)) {
     }
 }
 
+$esc = [char]27
+
 # Compile and Initialize BrainRenderer
 $csPath = Join-Path $ScriptDir "BrainRenderer.cs"
-if (-not ([System.Management.Automation.PSTypeName]'BrainRenderer').Type) {
-    Add-Type -Path $csPath
+if (-not ('BrainRenderer' -as [type])) {
+    if (Test-Path $csPath) {
+        Add-Type -Path $csPath -ErrorAction Stop
+    }
 }
 [BrainRenderer]::EnableVT()
-$renderer = [BrainRenderer]::Create()
+$renderer = New-Object BrainRenderer
 
 function Get-DashboardOverlayLines {
     $envMap = Parse-EnvFile $envPath
@@ -97,12 +101,12 @@ function Get-DashboardOverlayLines {
 function Run-SubAction {
     param([scriptblock]$Action)
     [Console]::CursorVisible = $true
-    [Console]::Write("`u001b[0m`u001b[2J`u001b[1;1H")
+    [Console]::Write("$esc[0m$esc[2J$esc[1;1H")
     try {
         & $Action
     } finally {
         [Console]::CursorVisible = $false
-        [Console]::Write("`u001b[0m`u001b[2J`u001b[1;1H")
+        [Console]::Write("$esc[0m$esc[2J$esc[1;1H")
     }
 }
 
@@ -278,6 +282,6 @@ try {
     }
 } finally {
     [Console]::CursorVisible = $true
-    [Console]::Write("`u001b[0m`u001b[2J`u001b[1;1H")
+    [Console]::Write("$esc[0m$esc[2J$esc[1;1H")
     Write-Host "OptiCore AI Control Center closed. Have a productive day!" -ForegroundColor Cyan
 }

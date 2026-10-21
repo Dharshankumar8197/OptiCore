@@ -58,6 +58,11 @@ public class BrainRenderer
         catch (Exception) { }
     }
 
+    public static BrainRenderer Create()
+    {
+        return new BrainRenderer();
+    }
+
     static double Clamp(double v, double lo, double hi)
     {
         return v < lo ? lo : (v > hi ? hi : v);
