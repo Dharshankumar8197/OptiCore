@@ -9,7 +9,7 @@ if (Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction Sile
     $PSNativeCommandUseErrorActionPreference = $false
 }
 
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$ScriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Definition }
 $ServerRoot = Split-Path -Parent $ScriptDir
 . (Join-Path $ScriptDir "common.ps1")
 
@@ -90,43 +90,41 @@ function Get-DashboardOverlayLines {
 
 function Format-DashboardHUD {
     param([string[]]$Lines, [int]$Width)
-    $sb = [System.Text.StringBuilder]::new()
-    $sb.Append("${esc}[?25l")
+    $output = [System.Collections.Generic.List[string]]::new()
+    $output.Add("${esc}[?25l")
     $row = 1
     foreach ($line in $Lines) {
-        $sb.Append("${esc}[${row};1H")
-
-        if ($line -match "^={10,}") {
-            $sb.Append("${esc}[38;5;51m$line${esc}[0m")
+        $styled = if ($line -match "^={10,}") {
+            "${esc}[38;5;51m$line${esc}[0m"
         } elseif ($line -match "^\+-{10,}") {
-            $sb.Append("${esc}[38;5;45m$line${esc}[0m")
+            "${esc}[38;5;45m$line${esc}[0m"
         } elseif ($line -match "^\|\s*SYSTEM STATUS DASHBOARD") {
-            $sb.Append("${esc}[38;5;45m|${esc}[1;38;5;51m SYSTEM STATUS DASHBOARD" + (" " * 44) + "${esc}[38;5;45m|${esc}[0m")
+            "${esc}[38;5;45m|${esc}[1;38;5;51m SYSTEM STATUS DASHBOARD" + (" " * 44) + "${esc}[38;5;45m|${esc}[0m"
         } elseif ($line -match "^\s*OptiCore\s*-") {
-            $sb.Append("${esc}[1;38;5;51m$line${esc}[0m")
+            "${esc}[1;38;5;51m$line${esc}[0m"
         } elseif ($line -match "^\s*YOLO26s best\.pt") {
-            $sb.Append("${esc}[38;5;37m$line${esc}[0m")
+            "${esc}[38;5;37m$line${esc}[0m"
         } elseif ($line -match "^\s*\[Hotkeys:") {
-            $sb.Append("${esc}[1;38;5;51m$line${esc}[0m")
+            "${esc}[1;38;5;51m$line${esc}[0m"
         } elseif ($line -match "^\s*\*") {
-            $styled = $line -replace "^\s*\*", "  ${esc}[38;5;226m*${esc}[0m"
-            $styled = $styled -replace "(\[(ACTIVE|READY[^\]]*|ONLINE[^\]]*)\])", "${esc}[1;38;5;46m`$1${esc}[0m"
-            $styled = $styled -replace "(\[(STOPPED|OFFLINE)\])", "${esc}[1;38;5;203m`$1${esc}[0m"
-            $styled = $styled -replace "(\[STANDBY\])", "${esc}[1;38;5;226m`$1${esc}[0m"
-            $styled = $styled -replace "(\[ENABLED[^\]]*\])", "${esc}[1;38;5;51m`$1${esc}[0m"
-            $styled = $styled -replace "(\[DISABLED[^\]]*\])", "${esc}[38;5;244m`$1${esc}[0m"
-            $sb.Append($styled)
+            $s = $line -replace "^\s*\*", "  ${esc}[38;5;226m*${esc}[0m"
+            $s = $s -replace "(\[(ACTIVE|READY[^\]]*|ONLINE[^\]]*)\])", "${esc}[1;38;5;46m`$1${esc}[0m"
+            $s = $s -replace "(\[(STOPPED|OFFLINE)\])", "${esc}[1;38;5;203m`$1${esc}[0m"
+            $s = $s -replace "(\[STANDBY\])", "${esc}[1;38;5;226m`$1${esc}[0m"
+            $s = $s -replace "(\[ENABLED[^\]]*\])", "${esc}[1;38;5;51m`$1${esc}[0m"
+            $s = $s -replace "(\[DISABLED[^\]]*\])", "${esc}[38;5;244m`$1${esc}[0m"
+            $s
         } else {
-            $styled = [regex]::Replace($line, "\[([^\]]+)\]", "${esc}[1;38;5;45m[`$1]${esc}[0m")
-            $sb.Append($styled)
+            [regex]::Replace($line, "\[([^\]]+)\]", "${esc}[1;38;5;45m[`$1]${esc}[0m")
         }
-        $sb.Append("${esc}[K")
+
+        $output.Add("${esc}[${row};1H${styled}${esc}[K")
         $row++
     }
     for ($r = $row; $r -le [Math]::Max($row + 2, 28); $r++) {
-        $sb.Append("${esc}[${r};1H${esc}[K")
+        $output.Add("${esc}[${r};1H${esc}[K")
     }
-    return $sb.ToString()
+    return [string]::Join("", $output)
 }
 
 function Run-SubAction {
@@ -171,7 +169,8 @@ try {
             [Console]::Write($frame)
         }
 
-        if ([Console]::KeyAvailable) {
+        $hasKey = try { [Console]::KeyAvailable } catch { $false }
+        if ($hasKey) {
             $key = [Console]::ReadKey($true)
             $char = $key.KeyChar.ToString()
 
