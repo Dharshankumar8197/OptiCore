@@ -134,12 +134,14 @@ If you are running the OptiCore Next.js Vision Studio web app on Vercel or local
 | Command | Description |
 | :--- | :--- |
 | `menu.bat` / `run.bat` | Interactive PowerShell Control Center with live status, toggles, progress bars, and `.env` editing. |
+| `brain.bat` | 1-Click launcher for the in-memory 3D Neural Brain Visualizer (30 FPS ASCII screensaver). |
 | `start.bat` | Starts the server, validates health with progress bar, and outputs live URLs. |
 | `stop.bat` | Gracefully shuts down server containers and ngrok tunnel with progress bar. |
 | `status.bat` | Displays container state, memory/CPU diagnostics, and active tunnel status. |
 | `update.bat` | Pulls the latest GHCR Docker image while strictly preserving your `.env` configuration. |
 | `uninstall.bat` | Cleans up containers and virtual networks with optional data purge. |
 | `scripts\verify.ps1` | Runs the automated 17-point verification suite. |
+
 
 
 ---

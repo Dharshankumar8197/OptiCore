@@ -45,11 +45,17 @@ if os.path.exists(STATIC_DIR):
 
 @app.get("/")
 def read_root(request: Request):
-    """Root endpoint serving embedded Vision Studio UI for browsers, or JSON for API clients."""
+    """Root endpoint serving embedded Vision Studio UI for browsers, or JSON for API clients/Vercel."""
     accept = request.headers.get("accept", "")
     index_path = os.path.join(STATIC_DIR, "index.html")
-    if "text/html" in accept and os.path.exists(index_path):
-        return FileResponse(index_path)
+    if "application/json" in accept:
+        return {
+            "app": "OptiCore Backend",
+            "status": "running",
+            "version": settings.version,
+            "docs": "/docs",
+            "ui": "/ui",
+        }
     if os.path.exists(index_path):
         return FileResponse(index_path)
 
@@ -60,6 +66,7 @@ def read_root(request: Request):
         "docs": "/docs",
         "ui": "/ui",
     }
+
 
 
 @app.get("/ui")
