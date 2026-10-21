@@ -121,6 +121,25 @@ try {
     Pop-Location
 }
 
+# Auto-sync latest local backend fixes into container if running in development workspace
+$devAppSource = if (Test-Path "C:\IMP PROJECTS\opticore\backend\app\inference.py") {
+    "C:\IMP PROJECTS\opticore\backend\app"
+} elseif (Test-Path (Join-Path (Split-Path $ServerRoot -Parent) "backend\app\inference.py")) {
+    Join-Path (Split-Path $ServerRoot -Parent) "backend\app"
+} else {
+    $null
+}
+
+if ($devAppSource) {
+    try {
+        & docker cp (Join-Path $devAppSource "inference.py") opticore-ai-server:/app/app/inference.py 2>$null
+        & docker cp (Join-Path $devAppSource "api\model.py") opticore-ai-server:/app/app/api/model.py 2>$null
+        & docker cp (Join-Path $devAppSource "schemas\model.py") opticore-ai-server:/app/app/schemas/model.py 2>$null
+        & docker cp (Join-Path $devAppSource "main.py") opticore-ai-server:/app/app/main.py 2>$null
+        & docker restart opticore-ai-server 2>$null | Out-Null
+    } catch {}
+}
+
 # 6. Wait for Backend Readiness with Animated Progress Bar
 Log-Info "Waiting for OptiCore AI server to respond on port $apiPort..."
 
