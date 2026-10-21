@@ -27,9 +27,9 @@ public class BrainRenderer
 
     const string Ramp = ".'`,:;+*oO0";
     static readonly int[][] Pals = new int[][] {
-        new int[] { 17, 18, 24, 25, 31, 32, 33, 38, 39, 45, 81, 117, 159 },   // blue (upper / frontal)
-        new int[] { 23, 23, 24, 30, 30, 36, 37, 43, 44, 50, 86, 122, 159 },   // teal (middle)
-        new int[] { 22, 28, 29, 35, 36, 42, 48, 49, 78, 85, 121, 157, 194 }   // green (lower)
+        new int[] { 22, 28, 34, 35, 40, 41, 46, 47, 82, 83, 118, 120, 154 },  // Pure Matrix Green
+        new int[] { 22, 28, 29, 34, 35, 40, 41, 46, 48, 82, 118, 119, 155 },  // Pure Emerald Green
+        new int[] { 22, 28, 29, 35, 36, 41, 42, 46, 48, 82, 84, 120, 156 }   // Pure Cyber Green
     };
     double[] rnd;
     int[] hue;
@@ -226,9 +226,9 @@ public class BrainRenderer
         }
         for (int i = 0; i < zbuf.Length; i++) { zbuf[i] = double.MaxValue; bright[i] = 0; }
 
-        double ang = 1.2 * Math.Sin(time * 0.25);
+        double ang = time * 0.95;
         double ca = Math.Cos(ang), sa = Math.Sin(ang);
-        double ct = Math.Cos(0.18), st = Math.Sin(0.18);
+        double ct = Math.Cos(0.20), st = Math.Sin(0.20);
 
         // light direction (towards the light), view space: left, up, toward camera
         double lxv = -0.6, lyv = 0.7, lzv = -0.6;
@@ -305,12 +305,12 @@ public class BrainRenderer
             b *= 0.30 + 0.70 * ao[i];
 
             // travelling neural signal pulse
-            double p = Math.Sin(px[i] * 3.5 - time * 2.5);
+            double p = Math.Sin(px[i] * 3.5 - time * 6.0);
             if (p > 0 && part[i] != 2) b += 0.45 * Math.Pow(p, 10.0);
 
             b = Math.Pow(Clamp(b, 0.0, 1.0), 0.85);
             if (back) b *= 0.35;
-            double tw = Math.Sin(time * 2.2 + rnd[i] * 40.0);
+            double tw = Math.Sin(time * 4.0 + rnd[i] * 40.0);
             if (tw > 0) b += 0.25 * Math.Pow(tw, 8.0);
             b = Clamp(b, 0.0, 1.0);
             if (b * 1.25 + 0.12 < rnd[i]) continue;
@@ -387,9 +387,9 @@ public class BrainRenderer
         }
         for (int i = 0; i < zbuf.Length; i++) { zbuf[i] = double.MaxValue; bright[i] = 0; }
 
-        double ang = 1.2 * Math.Sin(time * 0.25);
+        double ang = time * 0.95;
         double ca = Math.Cos(ang), sa = Math.Sin(ang);
-        double ct = Math.Cos(0.18), st = Math.Sin(0.18);
+        double ct = Math.Cos(0.20), st = Math.Sin(0.20);
 
         // light direction
         double lxv = -0.6, lyv = 0.7, lzv = -0.6;
@@ -436,7 +436,10 @@ public class BrainRenderer
             if (c > smap[ci]) smap[ci] = c;
         }
 
-        double unit = Math.Min(BH / 2.5, W / 4.8);
+        double textWidth = 70.0;
+        double centerX = (W >= 85) ? (textWidth + (W - textWidth) * 0.5) : (W * 0.5);
+        double availWidth = (W >= 85) ? (W - textWidth + 8.0) : W;
+        double unit = Math.Min(BH / 2.3, availWidth / 2.7);
 
         for (int i = 0; i < n; i++)
         {
@@ -460,18 +463,18 @@ public class BrainRenderer
             b += 0.18 * Math.Pow(1.0 - facing, 3.0);
             b *= 0.30 + 0.70 * ao[i];
 
-            double p = Math.Sin(px[i] * 3.5 - time * 2.5);
+            double p = Math.Sin(px[i] * 3.5 - time * 6.0);
             if (p > 0 && part[i] != 2) b += 0.45 * Math.Pow(p, 10.0);
 
             b = Math.Pow(Clamp(b, 0.0, 1.0), 0.85);
             if (back) b *= 0.35;
-            double tw = Math.Sin(time * 2.2 + rnd[i] * 40.0);
+            double tw = Math.Sin(time * 4.0 + rnd[i] * 40.0);
             if (tw > 0) b += 0.25 * Math.Pow(tw, 8.0);
             b = Clamp(b, 0.0, 1.0);
             if (b * 1.25 + 0.12 < rnd[i]) continue;
 
             double s = 4.6 / (4.6 + tz[i]);
-            int sx = (int)(W / 2.0 + tx[i] * s * unit * 2.0);
+            int sx = (int)(centerX + tx[i] * s * unit * 2.0);
             int sy = (int)(BH / 2.0 - ty[i] * s * unit);
             if (sx < 0 || sx >= W || sy < 0 || sy >= BH) continue;
 
