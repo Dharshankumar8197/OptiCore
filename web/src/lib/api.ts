@@ -266,7 +266,9 @@ async function apiFetch<T>(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const headers: Record<string, string> = {};
+    const headers: Record<string, string> = {
+      'ngrok-skip-browser-warning': 'true',
+    };
     if (options?.body && !(options.body instanceof FormData)) {
       headers['Content-Type'] = 'application/json';
     }
@@ -298,7 +300,7 @@ export const apiClient = {
     return apiFetch<HealthResponse>('/health', undefined, 3000);
   },
 
-  // System status
+  // System Status
   getSystemStatus(): Promise<SystemStatusResponse> {
     return apiFetch<SystemStatusResponse>('/api/status');
   },
@@ -371,6 +373,9 @@ export const apiClient = {
       const baseUrl = getApiBase();
       const res = await fetch(`${baseUrl}/api/model/detect`, {
         method: 'POST',
+        headers: {
+          'ngrok-skip-browser-warning': 'true',
+        },
         body: formData,
         signal: controller.signal,
       });
