@@ -226,7 +226,7 @@ public class BrainRenderer
         }
         for (int i = 0; i < zbuf.Length; i++) { zbuf[i] = double.MaxValue; bright[i] = 0; }
 
-        double ang = time * 0.95;
+        double ang = time * 3.0;
         double ca = Math.Cos(ang), sa = Math.Sin(ang);
         double ct = Math.Cos(0.20), st = Math.Sin(0.20);
 
@@ -305,12 +305,12 @@ public class BrainRenderer
             b *= 0.30 + 0.70 * ao[i];
 
             // travelling neural signal pulse
-            double p = Math.Sin(px[i] * 3.5 - time * 6.0);
+            double p = Math.Sin(px[i] * 3.5 - time * 10.0);
             if (p > 0 && part[i] != 2) b += 0.45 * Math.Pow(p, 10.0);
 
             b = Math.Pow(Clamp(b, 0.0, 1.0), 0.85);
             if (back) b *= 0.35;
-            double tw = Math.Sin(time * 4.0 + rnd[i] * 40.0);
+            double tw = Math.Sin(time * 8.0 + rnd[i] * 40.0);
             if (tw > 0) b += 0.25 * Math.Pow(tw, 8.0);
             b = Clamp(b, 0.0, 1.0);
             if (b * 1.25 + 0.12 < rnd[i]) continue;
@@ -387,7 +387,7 @@ public class BrainRenderer
         }
         for (int i = 0; i < zbuf.Length; i++) { zbuf[i] = double.MaxValue; bright[i] = 0; }
 
-        double ang = time * 0.95;
+        double ang = time * 3.0;
         double ca = Math.Cos(ang), sa = Math.Sin(ang);
         double ct = Math.Cos(0.20), st = Math.Sin(0.20);
 
@@ -436,10 +436,14 @@ public class BrainRenderer
             if (c > smap[ci]) smap[ci] = c;
         }
 
+        double brainStartRow = 4.0;
+        double brainHeight = Math.Max(8.0, (double)BH - brainStartRow);
+        double centerY = brainStartRow + brainHeight * 0.5;
+
         double textWidth = 70.0;
         double centerX = (W >= 85) ? (textWidth + (W - textWidth) * 0.5) : (W * 0.5);
         double availWidth = (W >= 85) ? (W - textWidth + 8.0) : W;
-        double unit = Math.Min(BH / 2.3, availWidth / 2.7);
+        double unit = Math.Min(brainHeight / 2.2, availWidth / 2.6);
 
         for (int i = 0; i < n; i++)
         {
@@ -463,20 +467,20 @@ public class BrainRenderer
             b += 0.18 * Math.Pow(1.0 - facing, 3.0);
             b *= 0.30 + 0.70 * ao[i];
 
-            double p = Math.Sin(px[i] * 3.5 - time * 6.0);
+            double p = Math.Sin(px[i] * 3.5 - time * 10.0);
             if (p > 0 && part[i] != 2) b += 0.45 * Math.Pow(p, 10.0);
 
             b = Math.Pow(Clamp(b, 0.0, 1.0), 0.85);
             if (back) b *= 0.35;
-            double tw = Math.Sin(time * 4.0 + rnd[i] * 40.0);
+            double tw = Math.Sin(time * 8.0 + rnd[i] * 40.0);
             if (tw > 0) b += 0.25 * Math.Pow(tw, 8.0);
             b = Clamp(b, 0.0, 1.0);
             if (b * 1.25 + 0.12 < rnd[i]) continue;
 
             double s = 4.6 / (4.6 + tz[i]);
             int sx = (int)(centerX + tx[i] * s * unit * 2.0);
-            int sy = (int)(BH / 2.0 - ty[i] * s * unit);
-            if (sx < 0 || sx >= W || sy < 0 || sy >= BH) continue;
+            int sy = (int)(centerY - ty[i] * s * unit);
+            if (sx < 0 || sx >= W || sy < (int)brainStartRow || sy >= BH) continue;
 
             int idx = sy * W + sx;
             if (tz[i] < zbuf[idx])
@@ -525,7 +529,7 @@ public class BrainRenderer
                 }
                 else
                 {
-                    if (zbuf[idx] == double.MaxValue)
+                    if (row < 4 || zbuf[idx] == double.MaxValue)
                     {
                         if (lastColor != 0) { sb.Append("\u001b[0m"); lastColor = 0; }
                         sb.Append(' ');
