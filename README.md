@@ -36,7 +36,7 @@ irm https://raw.githubusercontent.com/Dharshankumar8197/OptiCore/main/scripts/in
   * **Animated Load Bars**: Real-time progress bars (`[████████░░░░] 65%`) during Docker startup, health polling, and container shutdown.
   * **1-Click Toggles**: Start/Stop, Restart, toggle Ngrok HTTPS tunnel `[ON/OFF]`, cycle detection sensitivity (`0.35` / `0.50` / `0.70`).
   * **Interactive `.env` Editor**: Opens `.env` in Notepad with variable explanations and auto-prompts to restart containers.
-  * **Live 3D Neural Brain Visualizer**: 30 FPS in-memory C# ASCII rotating neural point cloud.
+  * **Live OptiCore AI Server Visualizer**: 30 FPS in-memory C# ASCII rotating point cloud backdrop.
 * **Embedded Vision Studio UI**: Embedded HTML5/Canvas studio served directly at `http://localhost:8000/` and over your public ngrok HTTPS tunnel.
 * **On-Device Speech Advisory (TTS)**: Spoken directional warnings for road hazards and approaching obstacles with a 4-second cooldown.
 
@@ -49,7 +49,7 @@ Inside your extracted `portable_server` folder:
 | Launcher | Command | Description |
 | :--- | :--- | :--- |
 | **`menu.bat` / `run.bat`** | `.\menu.bat` | **Interactive Control Center** with live status dashboard, animated progress bars, 1-click toggles, and `.env` editor. |
-| **`brain.bat`** | `.\brain.bat` | 1-Click launcher for the in-memory **3D Neural Brain Visualizer** (30 FPS ASCII screensaver). |
+| **`brain.bat`** | `.\brain.bat` | 1-Click launcher for the in-memory **OptiCore AI Server Visualizer** (30 FPS ASCII screensaver). |
 | **`start.bat`** | `.\start.bat` | Starts Docker containers, validates health with progress bar, and outputs live public HTTPS URLs. |
 | **`stop.bat`** | `.\stop.bat` | Gracefully shuts down server containers and ngrok tunnel with progress bar. |
 | **`status.bat`** | `.\status.bat` | Displays container state, memory/CPU diagnostics, and active tunnel status. |
@@ -145,7 +145,7 @@ OptiCore/
 ├── portable_server/           # Windows Portable AI Server release package
 │   ├── menu.bat               # Interactive Control Center launcher
 │   ├── run.bat                # Quick menu launcher alias
-│   ├── brain.bat              # 1-Click 3D Neural Brain Visualizer
+│   ├── brain.bat              # 1-Click OptiCore AI Server Visualizer
 │   ├── start.bat              # Start AI server & Ngrok tunnel
 │   ├── stop.bat               # Stop server containers
 │   ├── status.bat             # Live diagnostics report

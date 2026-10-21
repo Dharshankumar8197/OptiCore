@@ -364,4 +364,187 @@ public class BrainRenderer
 
         return sb.ToString();
     }
+
+    public string RenderWithOverlay(double time, int w, int h, string[] overlayLines, int topRow = 1, int bottomMargin = 1, string bottomText = "")
+    {
+        StringBuilder sb = new StringBuilder(w * h * 6);
+
+        int maxRow = Math.Max(topRow + 4, h - bottomMargin);
+        int bh = maxRow - topRow;
+
+        if (w != W || bh != BH)
+        {
+            W = w; BH = bh;
+            zbuf = new double[W * BH];
+            bright = new double[W * BH];
+            cpart = new int[W * BH];
+            sb.Append("\u001b[2J");
+        }
+        for (int i = 0; i < zbuf.Length; i++) { zbuf[i] = double.MaxValue; bright[i] = 0; }
+
+        double ang = 1.2 * Math.Sin(time * 0.25);
+        double ca = Math.Cos(ang), sa = Math.Sin(ang);
+        double ct = Math.Cos(0.18), st = Math.Sin(0.18);
+
+        // light direction
+        double lxv = -0.6, lyv = 0.7, lzv = -0.6;
+        double ll = Math.Sqrt(lxv * lxv + lyv * lyv + lzv * lzv);
+        lxv /= ll; lyv /= ll; lzv /= ll;
+
+        double ux = -lzv, uy = 0.0, uz = lxv;
+        double ul = Math.Sqrt(ux * ux + uz * uz);
+        ux /= ul; uz /= ul;
+        double vx = lyv * uz - lzv * uy;
+        double vy = lzv * ux - lxv * uz;
+        double vz = lxv * uy - lyv * ux;
+
+        double hx = lxv, hy = lyv, hz = lzv - 1.0;
+        double hl = Math.Sqrt(hx * hx + hy * hy + hz * hz);
+        hx /= hl; hy /= hl; hz /= hl;
+
+        for (int i = 0; i < smap.Length; i++) smap[i] = -1e9;
+
+        for (int i = 0; i < n; i++)
+        {
+            double x = px[i], y = py[i], z = pz[i];
+            double xr = x * ca - y * sa;
+            double yr = x * sa + y * ca;
+            tx[i] = xr;
+            ty[i] = z * ct + yr * st;
+            tz[i] = -z * st + yr * ct;
+
+            double nxr = nx[i] * ca - ny[i] * sa;
+            double nyr = nx[i] * sa + ny[i] * ca;
+            tnx[i] = nxr;
+            tny[i] = nz[i] * ct + nyr * st;
+            tnz[i] = -nz[i] * st + nyr * ct;
+
+            double a = tx[i] * ux + ty[i] * uy + tz[i] * uz;
+            double b = tx[i] * vx + ty[i] * vy + tz[i] * vz;
+            double c = tx[i] * lxv + ty[i] * lyv + tz[i] * lzv;
+            int ia = (int)((a + 2.4) * (SM / 4.8));
+            int ib = (int)((b + 2.4) * (SM / 4.8));
+            if (ia < 0) ia = 0; if (ia >= SM) ia = SM - 1;
+            if (ib < 0) ib = 0; if (ib >= SM) ib = SM - 1;
+            int ci = ib * SM + ia;
+            cell[i] = ci;
+            if (c > smap[ci]) smap[ci] = c;
+        }
+
+        double unit = Math.Min(BH / 2.5, W / 4.8);
+
+        for (int i = 0; i < n; i++)
+        {
+            bool back = tnz[i] > 0.3;
+            if (back && rnd[i] > 0.15) continue;
+
+            double c = tx[i] * lxv + ty[i] * lyv + tz[i] * lzv;
+            bool lit = c >= smap[cell[i]] - 0.06;
+
+            double diff = tnx[i] * lxv + tny[i] * lyv + tnz[i] * lzv;
+            if (diff < 0) diff = 0;
+
+            double b = 0.18 + 0.78 * diff * (lit ? 1.0 : 0.35);
+            if (lit && diff > 0)
+            {
+                double sp = tnx[i] * hx + tny[i] * hy + tnz[i] * hz;
+                if (sp > 0) b += 0.25 * Math.Pow(sp, 20.0);
+            }
+            double facing = -tnz[i];
+            if (facing < 0) facing = 0;
+            b += 0.18 * Math.Pow(1.0 - facing, 3.0);
+            b *= 0.30 + 0.70 * ao[i];
+
+            double p = Math.Sin(px[i] * 3.5 - time * 2.5);
+            if (p > 0 && part[i] != 2) b += 0.45 * Math.Pow(p, 10.0);
+
+            b = Math.Pow(Clamp(b, 0.0, 1.0), 0.85);
+            if (back) b *= 0.35;
+            double tw = Math.Sin(time * 2.2 + rnd[i] * 40.0);
+            if (tw > 0) b += 0.25 * Math.Pow(tw, 8.0);
+            b = Clamp(b, 0.0, 1.0);
+            if (b * 1.25 + 0.12 < rnd[i]) continue;
+
+            double s = 4.6 / (4.6 + tz[i]);
+            int sx = (int)(W / 2.0 + tx[i] * s * unit * 2.0);
+            int sy = (int)(BH / 2.0 - ty[i] * s * unit);
+            if (sx < 0 || sx >= W || sy < 0 || sy >= BH) continue;
+
+            int idx = sy * W + sx;
+            if (tz[i] < zbuf[idx])
+            {
+                zbuf[idx] = tz[i];
+                bright[idx] = b;
+                cpart[idx] = hue[i];
+            }
+        }
+
+        sb.Append("\u001b[40m\u001b[?25l");
+
+        for (int row = 0; row < BH; row++)
+        {
+            sb.Append("\u001b[").Append(row + topRow).Append(";1H");
+            int lastColor = -1;
+            string oLine = (overlayLines != null && row < overlayLines.Length) ? overlayLines[row] : null;
+
+            for (int col = 0; col < W; col++)
+            {
+                int idx = row * W + col;
+                char oChar = (oLine != null && col < oLine.Length) ? oLine[col] : ' ';
+
+                if (oChar != ' ')
+                {
+                    int targetColor = 15; // default white
+                    if (oChar == '=' || oChar == '+' || oChar == '-' || oChar == '|')
+                    {
+                        targetColor = 51; // cyan border
+                    }
+                    else if (oChar == '[' || oChar == ']')
+                    {
+                        targetColor = 45; // bright teal
+                    }
+                    else if (oChar == '*')
+                    {
+                        targetColor = 226; // yellow bullet
+                    }
+
+                    if (targetColor != lastColor)
+                    {
+                        sb.Append("\u001b[38;5;").Append(targetColor).Append('m');
+                        lastColor = targetColor;
+                    }
+                    sb.Append(oChar);
+                }
+                else
+                {
+                    if (zbuf[idx] == double.MaxValue)
+                    {
+                        if (lastColor != 0) { sb.Append("\u001b[0m"); lastColor = 0; }
+                        sb.Append(' ');
+                    }
+                    else
+                    {
+                        int lvl = (int)(bright[idx] * (Ramp.Length - 0.01));
+                        int[] pal = Pals[cpart[idx]];
+                        int pi = lvl * pal.Length / Ramp.Length;
+                        int color = pal[pi];
+                        if (color != lastColor)
+                        {
+                            sb.Append("\u001b[38;5;").Append(color).Append('m');
+                            lastColor = color;
+                        }
+                        sb.Append(Ramp[lvl]);
+                    }
+                }
+            }
+            sb.Append("\u001b[0m");
+        }
+
+        if (!string.IsNullOrEmpty(bottomText))
+        {
+            sb.Append("\u001b[").Append(h).Append(";1H\u001b[38;5;51m").Append(bottomText).Append("\u001b[K\u001b[0m");
+        }
+
+        return sb.ToString();
+    }
 }

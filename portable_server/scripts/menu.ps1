@@ -1,5 +1,6 @@
 # ==============================================================================
 # OptiCore Portable AI Server — Interactive PowerShell Control Center
+# Live Holographic OptiCore AI Server Animated Background Dashboard
 # ==============================================================================
 
 Set-StrictMode -Version Latest
@@ -23,25 +24,15 @@ if (-not (Test-Path $envPath)) {
     }
 }
 
-# Auto-launch 3D Neural Brain Visualizer in background companion window
-function Ensure-BrainVisualizerBackground {
-    try {
-        $running = Get-Process | Where-Object { $_.MainWindowTitle -like "*3D Neural Brain*" }
-        if (-not $running) {
-            $brainBat = Join-Path $ServerRoot "brain.bat"
-            if (Test-Path $brainBat) {
-                Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$brainBat`"" -WindowStyle Normal
-            }
-        }
-    } catch {}
+# Compile and Initialize BrainRenderer
+$csPath = Join-Path $ScriptDir "BrainRenderer.cs"
+if (-not ([System.Management.Automation.PSTypeName]'BrainRenderer').Type) {
+    Add-Type -Path $csPath
 }
+[BrainRenderer]::EnableVT()
+$renderer = [BrainRenderer]::Create()
 
-Ensure-BrainVisualizerBackground
-
-function Clear-And-ShowDashboard {
-    Clear-Host
-    Write-OptiCoreBanner "Interactive Control Center"
-
+function Get-DashboardOverlayLines {
     $envMap = Parse-EnvFile $envPath
     $port = if ($envMap["API_PORT"]) { [int]$envMap["API_PORT"] } elseif ($envMap["PORT"]) { [int]$envMap["PORT"] } else { 8000 }
     $live = Get-ServerLiveStatus -Port $port
@@ -52,316 +43,241 @@ function Clear-And-ShowDashboard {
     $groqKey = $envMap["GROQ_API_KEY"]
     $conf = if ($envMap["CONFIDENCE_THRESHOLD"]) { $envMap["CONFIDENCE_THRESHOLD"] } else { "0.50" }
 
-    # Render Live System Status Card
-    Write-Host "+----------------------------------------------------------------------+" -ForegroundColor DarkCyan
-    Write-Host "| SYSTEM STATUS DASHBOARD                                              |" -ForegroundColor Cyan
-    Write-Host "+----------------------------------------------------------------------+" -ForegroundColor DarkCyan
-    
-    # Docker Desktop
     $dockerText = if ($live.DockerRunning) { "[ACTIVE]" } else { "[STOPPED]" }
-    $dockerColor = if ($live.DockerRunning) { "Green" } else { "Red" }
-    Write-Host "  * Docker Desktop Engine: " -NoNewline -ForegroundColor White
-    Write-Host "$dockerText" -ForegroundColor $dockerColor
-
-    # AI Server
     $serverText = if ($live.BackendOnline) { "[ONLINE - Port $port]" } else { "[OFFLINE]" }
-    $serverColor = if ($live.BackendOnline) { "Green" } else { "DarkGray" }
-    Write-Host "  * OptiCore AI Backend:   " -NoNewline -ForegroundColor White
-    Write-Host "$serverText" -ForegroundColor $serverColor
+    $modelText  = if ($live.ModelLoaded) { "[READY - 20 Classes Verified]" } else { "[STANDBY]" }
 
-    # YOLO26s Model
-    if ($live.ModelLoaded) {
-        Write-Host "  * YOLO26s AI Engine:     " -NoNewline -ForegroundColor White
-        Write-Host "[READY - 20 Classes Verified]" -ForegroundColor Green
+    $ngrokText = if ($live.PublicUrl) {
+        $live.PublicUrl
+    } elseif ($ngrokEnabled -and $ngrokToken -and $ngrokToken.Trim() -ne "") {
+        "[ENABLED - Starting...]"
+    } elseif ($ngrokEnabled) {
+        "[ENABLED - Awaiting Token]"
     } else {
-        Write-Host "  * YOLO26s AI Engine:     " -NoNewline -ForegroundColor White
-        Write-Host "[STANDBY / NOT RUNNING]" -ForegroundColor DarkGray
+        "[DISABLED / LOCAL ONLY]"
     }
 
-    # Ngrok Tunnel
-    if ($live.PublicUrl) {
-        Write-Host "  * Ngrok HTTPS Tunnel:    " -NoNewline -ForegroundColor White
-        Write-Host "$($live.PublicUrl)" -ForegroundColor Yellow
+    $groqText = if ($groqKey -and $groqKey.Trim() -ne "") {
+        "[ENABLED - openai/gpt-oss-120b - $(Redact-Secret $groqKey)]"
     } else {
-        $tunnelState = if ($ngrokEnabled -and $ngrokToken -and $ngrokToken.Trim() -ne "") { "[ENABLED - Starting or Connecting...]" } elseif ($ngrokEnabled) { "[ENABLED - Awaiting NGROK_AUTHTOKEN]" } else { "[DISABLED / LOCAL ONLY]" }
-        Write-Host "  * Ngrok HTTPS Tunnel:    " -NoNewline -ForegroundColor White
-        Write-Host "$tunnelState" -ForegroundColor DarkGray
+        "[DISABLED - Local Safety Engine Active]"
     }
 
-    # Groq AI Scene Assistant (openai/gpt-oss-120b)
-    if ($groqKey -and $groqKey.Trim() -ne "") {
-        Write-Host "  * Groq Scene Narration:  " -NoNewline -ForegroundColor White
-        Write-Host "[ENABLED - openai/gpt-oss-120b - $(Redact-Secret $groqKey)]" -ForegroundColor Green
-    } else {
-        Write-Host "  * Groq Scene Narration:  " -NoNewline -ForegroundColor White
-        Write-Host "[DISABLED / OPTIONAL - Local Rule-Based Safety Active]" -ForegroundColor DarkGray
-    }
-
-    # 3D Neural Visualizer Companion
-    $brainProc = Get-Process | Where-Object { $_.MainWindowTitle -like "*3D Neural Brain*" }
-    $brainText = if ($brainProc) { "[RUNNING IN BACKGROUND]" } else { "[STANDBY - Option A]" }
-    $brainColor = if ($brainProc) { "Green" } else { "DarkGray" }
-    Write-Host "  * 3D Neural Visualizer:  " -NoNewline -ForegroundColor White
-    Write-Host "$brainText" -ForegroundColor $brainColor
-
-    # Detection Sensitivity
-    Write-Host "  * Detection Sensitivity: " -NoNewline -ForegroundColor White
     $confLabel = if ([double]$conf -lt 0.40) { "$conf (Sensitive)" } elseif ([double]$conf -gt 0.60) { "$conf (Strict)" } else { "$conf (Balanced)" }
-    Write-Host "$confLabel" -ForegroundColor Cyan
-
-    # Host Architecture
-    Write-Host "  * Hardware Architecture: " -NoNewline -ForegroundColor White
-    Write-Host "$($arch.HostArchitecture) ($($arch.RecommendedArch))" -ForegroundColor DarkCyan
-    Write-Host "+----------------------------------------------------------------------+" -ForegroundColor DarkCyan
-    Write-Host ""
-
-    # Interactive Menu Selection
     $ngrokToggleStatus = if ($ngrokEnabled) { "[ON] -> Turn OFF" } else { "[OFF] -> Turn ON" }
 
-    Write-Host " [1 / S] " -NoNewline -ForegroundColor Cyan; Write-Host "Start AI Server & Tunnel" -ForegroundColor White
-    Write-Host " [2 / X] " -NoNewline -ForegroundColor Cyan; Write-Host "Stop AI Server & Tunnel" -ForegroundColor White
-    Write-Host " [3 / R] " -NoNewline -ForegroundColor Cyan; Write-Host "Restart AI Server (Reload Model & Settings)" -ForegroundColor White
-    Write-Host " [4 / T] " -NoNewline -ForegroundColor Yellow; Write-Host "Toggle Ngrok HTTPS Tunnel (Current: $ngrokToggleStatus)" -ForegroundColor Yellow
-    Write-Host " [5 / C] " -NoNewline -ForegroundColor Yellow; Write-Host "Cycle Detection Sensitivity (Current: $conf -> 0.35 / 0.50 / 0.70)" -ForegroundColor White
-    Write-Host " [6 / E] " -NoNewline -ForegroundColor Yellow; Write-Host "Open & Edit .env Configuration (in Notepad)" -ForegroundColor Yellow
-    Write-Host " [7 / K] " -NoNewline -ForegroundColor Yellow; Write-Host "Set / Paste Ngrok Authtoken directly" -ForegroundColor White
-    Write-Host " [8 / B] " -NoNewline -ForegroundColor Green; Write-Host "Open Web Vision Studio in Default Browser" -ForegroundColor Green
-    Write-Host " [9 / L] " -NoNewline -ForegroundColor Cyan; Write-Host "Stream Live Container Logs (Ctrl+C to return)" -ForegroundColor White
-    Write-Host " [D]     " -NoNewline -ForegroundColor Cyan; Write-Host "Server Diagnostics & Live Health Check" -ForegroundColor White
-    Write-Host " [V]     " -NoNewline -ForegroundColor Cyan; Write-Host "Run 17-Point Automated Verification Suite" -ForegroundColor White
-    Write-Host " [U]     " -NoNewline -ForegroundColor Cyan; Write-Host "Pull Latest Docker Image from GHCR" -ForegroundColor White
-    Write-Host " [A]     " -NoNewline -ForegroundColor Green; Write-Host "3D Neural Brain Visualizer (Background Window: Restart / Focus)" -ForegroundColor Green
-    Write-Host " [0 / Q] " -NoNewline -ForegroundColor Red; Write-Host "Exit Control Center" -ForegroundColor Red
-    Write-Host ""
-
-    # Prominent PowerShell & Terminal Commands Reference Box
-    Write-Host "======================================================================" -ForegroundColor DarkCyan
-    Write-Host " COMMANDS TO EDIT CONFIGURATION & CONTROL FROM POWERSHELL:" -ForegroundColor Cyan
-    Write-Host "   * Edit .env in Notepad:      notepad `"$envPath`"" -ForegroundColor White
-    Write-Host "   * Edit .env in VS Code:      code `"$envPath`"" -ForegroundColor White
-    Write-Host "   * Start Server from CLI:     .\start.bat" -ForegroundColor White
-    Write-Host "   * Stop Server from CLI:      .\stop.bat" -ForegroundColor White
-    Write-Host "   * Launch Control Menu:       .\menu.bat  (or .\run.bat)" -ForegroundColor White
-    Write-Host "   * Check Health via cURL:     curl.exe http://localhost:$port/health" -ForegroundColor White
-    Write-Host "   * Ngrok Local Dashboard:     http://localhost:4040" -ForegroundColor White
-    Write-Host "======================================================================" -ForegroundColor DarkCyan
-    Write-Host ""
+    return @(
+        "======================================================================",
+        "   OptiCore - Windows-First Portable AI Server (Live HUD)",
+        "   YOLO26s best.pt | Docker Desktop | ngrok HTTPS | Web Vision Studio",
+        "======================================================================",
+        "+--------------------------------------------------------------------+",
+        "| SYSTEM STATUS DASHBOARD                                            |",
+        "+--------------------------------------------------------------------+",
+        "  * Docker Desktop Engine: $dockerText",
+        "  * OptiCore AI Backend:   $serverText",
+        "  * YOLO26s AI Engine:     $modelText",
+        "  * Ngrok HTTPS Tunnel:    $ngrokText",
+        "  * Groq Scene Narration:  $groqText",
+        "  * Detection Sensitivity: $confLabel",
+        "  * Hardware Architecture: $($arch.HostArchitecture) ($($arch.RecommendedArch))",
+        "+--------------------------------------------------------------------+",
+        " [1 / S] Start AI Server & Tunnel      [7 / K] Set / Paste Ngrok Token",
+        " [2 / X] Stop AI Server & Tunnel       [8 / B] Open Web Vision Studio",
+        " [3 / R] Restart AI Server (Reload)    [9 / L] Stream Live Logs",
+        " [4 / T] Toggle Ngrok ($ngrokToggleStatus) [D]     Diagnostics & Health",
+        " [5 / C] Cycle Sensitivity ($conf)     [V]     Run 17-Point Suite",
+        " [6 / E] Edit .env in Notepad          [U]     Pull Latest Docker Image",
+        " [0 / Q] Exit Control Center           [A]     Repaint Visualizer HUD",
+        "======================================================================",
+        " [Hotkeys: 1-9, S, X, R, T, C, E, K, B, L, D, V, U, Q] Tap any key..."
+    )
 }
 
-# ── Interactive Menu Loop ──────────────────────────────────────────────────────
+function Run-SubAction {
+    param([scriptblock]$Action)
+    [Console]::CursorVisible = $true
+    [Console]::Write("`u001b[0m`u001b[2J`u001b[1;1H")
+    try {
+        & $Action
+    } finally {
+        [Console]::CursorVisible = $false
+        [Console]::Write("`u001b[0m`u001b[2J`u001b[1;1H")
+    }
+}
+
 $keepRunning = $true
+$stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+$lastOverlayFetch = [System.DateTime]::MinValue
+$cachedOverlay = $null
 
-while ($keepRunning) {
-    Clear-And-ShowDashboard
+[Console]::CursorVisible = $false
 
-    $choice = Read-Host "Select an option [0-9, S, X, R, T, C, E, K, B, L, D, V, U, Q]"
-    if (-not $choice) { continue }
-    $choice = $choice.Trim()
-
-    switch -Regex ($choice) {
-        "^(1|[Ss])$" {
-            Write-Host ""
-            Log-Info "Starting OptiCore AI Server..."
-            $startScript = Join-Path $ScriptDir "start.ps1"
-            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $startScript
-            Write-Host ""
-            Read-Host "Press Enter to return to menu"
+try {
+    while ($keepRunning) {
+        $now = [System.DateTime]::UtcNow
+        if (($now - $lastOverlayFetch).TotalSeconds -ge 2.0 -or $null -eq $cachedOverlay) {
+            $cachedOverlay = Get-DashboardOverlayLines
+            $lastOverlayFetch = $now
         }
 
-        "^(2|[Xx])$" {
-            Write-Host ""
-            Log-Info "Stopping OptiCore AI Server..."
-            Show-ProgressBar -Activity "Stopping Containers" -Percent 30 -Status "Sending stop signal..."
-            $stopScript = Join-Path $ScriptDir "stop.ps1"
-            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $stopScript
-            Show-ProgressBar -Activity "Containers Stopped" -Percent 100 -Status "Cleaned up!"
-            Write-Host ""
-            Read-Host "Press Enter to return to menu"
-        }
+        $w = [Math]::Max(72, [Console]::WindowWidth)
+        $h = [Math]::Max(26, [Console]::WindowHeight)
+        $t = [double]$stopwatch.ElapsedMilliseconds / 1000.0
 
-        "^(3|[Rr])$" {
-            Write-Host ""
-            Log-Info "Restarting OptiCore AI Server..."
-            Show-ProgressBar -Activity "Stopping Containers" -Percent 25 -Status "Shutting down..."
-            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir "stop.ps1")
-            Show-ProgressBar -Activity "Restarting Containers" -Percent 60 -Status "Starting server..."
-            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir "start.ps1")
-            Show-ProgressBar -Activity "Server Restart Complete" -Percent 100 -Status "Ready!"
-            Write-Host ""
-            Read-Host "Press Enter to return to menu"
-        }
+        $frame = $renderer.RenderWithOverlay($t, $w, $h, $cachedOverlay, 1, 1, "")
+        [Console]::SetCursorPosition(0, 0)
+        [Console]::Write($frame)
 
-        "^(4|[Tt])$" {
-            $newVal = Toggle-EnvSetting -EnvPath $envPath -SettingKey "NGROK_ENABLED" -DefaultValue "true"
-            Write-Host ""
-            if ($newVal -eq "true") {
-                Log-Success "Ngrok Public Tunnel set to: [ENABLED]"
-                $envMap = Parse-EnvFile $envPath
-                if (-not $envMap["NGROK_AUTHTOKEN"] -or $envMap["NGROK_AUTHTOKEN"].Trim() -eq "") {
-                    Log-Warn "Notice: NGROK_AUTHTOKEN is currently blank in your .env file."
-                    $setTokenNow = Read-Host "Would you like to enter your Ngrok token now? (Y/N)"
-                    if ($setTokenNow -match "^[Yy]") {
+        if ([Console]::KeyAvailable) {
+            $key = [Console]::ReadKey($true)
+            $char = $key.KeyChar.ToString()
+
+            switch -Regex ($char) {
+                "^(1|[Ss])$" {
+                    Run-SubAction {
+                        Write-Host ""
+                        Log-Info "Starting OptiCore AI Server..."
+                        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir "start.ps1")
+                        Write-Host ""
+                        Read-Host "Press Enter to return to HUD"
+                    }
+                    $cachedOverlay = $null
+                }
+
+                "^(2|[Xx])$" {
+                    Run-SubAction {
+                        Write-Host ""
+                        Log-Info "Stopping OptiCore AI Server..."
+                        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir "stop.ps1")
+                        Write-Host ""
+                        Read-Host "Press Enter to return to HUD"
+                    }
+                    $cachedOverlay = $null
+                }
+
+                "^(3|[Rr])$" {
+                    Run-SubAction {
+                        Write-Host ""
+                        Log-Info "Restarting OptiCore Server..."
+                        Push-Location $ServerRoot
+                        try {
+                            & docker compose -f $composeFile restart
+                            Log-Success "Containers restarted successfully."
+                        } finally {
+                            Pop-Location
+                        }
+                        Start-Sleep -Seconds 1
+                    }
+                    $cachedOverlay = $null
+                }
+
+                "^(4|[Tt])$" {
+                    $newVal = Toggle-EnvSetting -EnvPath $envPath -SettingKey "NGROK_ENABLED"
+                    $cachedOverlay = $null
+                }
+
+                "^(5|[Cc])$" {
+                    $newVal = Cycle-ConfidenceSetting -EnvPath $envPath
+                    $cachedOverlay = $null
+                }
+
+                "^(6|[Ee])$" {
+                    Run-SubAction {
+                        Open-EnvEditor -EnvPath $envPath
+                    }
+                    $cachedOverlay = $null
+                }
+
+                "^(7|[Kk])$" {
+                    Run-SubAction {
+                        Write-Host ""
+                        Write-Host "Set Ngrok Authtoken" -ForegroundColor Cyan
                         $tokenInput = Read-Host "Paste your Ngrok Authtoken"
                         if ($tokenInput -and $tokenInput.Trim() -ne "") {
-                            Set-EnvValue -EnvPath $envPath -Key "NGROK_AUTHTOKEN" -Value ($tokenInput.Trim())
-                            Log-Success "Ngrok token saved!"
+                            $lines = Get-Content $envPath
+                            $newLines = @()
+                            $found = $false
+                            foreach ($l in $lines) {
+                                if ($l -match "^NGROK_AUTHTOKEN=") {
+                                    $newLines += "NGROK_AUTHTOKEN=$($tokenInput.Trim())"
+                                    $found = $true
+                                } else {
+                                    $newLines += $l
+                                }
+                            }
+                            if (-not $found) { $newLines += "NGROK_AUTHTOKEN=$($tokenInput.Trim())" }
+                            $newLines | Set-Content $envPath -Encoding utf8
+                            Log-Success "Ngrok Authtoken updated."
+                        }
+                        Start-Sleep -Seconds 1
+                    }
+                    $cachedOverlay = $null
+                }
+
+                "^(8|[Bb])$" {
+                    $envMap = Parse-EnvFile $envPath
+                    $port = if ($envMap["API_PORT"]) { [int]$envMap["API_PORT"] } else { 8000 }
+                    $live = Get-ServerLiveStatus -Port $port
+                    $targetUrl = if ($live.PublicUrl) { $live.PublicUrl } else { "http://localhost:$port" }
+                    Start-Process $targetUrl
+                }
+
+                "^(9|[Ll])$" {
+                    Run-SubAction {
+                        Write-Host ""
+                        Log-Info "Streaming container logs (Press Ctrl+C to return to HUD)..."
+                        Push-Location $ServerRoot
+                        try {
+                            & docker compose -f $composeFile logs -f --tail=50
+                        } finally {
+                            Pop-Location
                         }
                     }
+                    $cachedOverlay = $null
                 }
-            } else {
-                Log-Warn "Ngrok Public Tunnel set to: [DISABLED] (Local Mode)"
-            }
 
-            $live = Get-ServerLiveStatus
-            if ($live.BackendOnline) {
-                $restart = Read-Host "Server is running. Restart now to apply tunnel change? (Y/N)"
-                if ($restart -match "^[Yy]") {
-                    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir "stop.ps1")
-                    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir "start.ps1")
-                }
-            }
-            Read-Host "Press Enter to return to menu"
-        }
-
-        "^(5|[Cc])$" {
-            $newConf = Cycle-ConfidenceSetting -EnvPath $envPath
-            Write-Host ""
-            $confLabel = if ([double]$newConf -lt 0.40) { "0.35 (Sensitive - captures more small/distant objects)" } elseif ([double]$newConf -gt 0.60) { "0.70 (Strict - high precision, fewer detections)" } else { "0.50 (Balanced - recommended default)" }
-            Log-Success "Updated CONFIDENCE_THRESHOLD in .env to: $confLabel"
-            
-            $live = Get-ServerLiveStatus
-            if ($live.BackendOnline) {
-                $restart = Read-Host "Server is running. Restart now to apply new sensitivity? (Y/N)"
-                if ($restart -match "^[Yy]") {
-                    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir "stop.ps1")
-                    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir "start.ps1")
-                }
-            }
-            Read-Host "Press Enter to return to menu"
-        }
-
-        "^(6|[Ee])$" {
-            Open-EnvEditor -EnvPath $envPath
-            $envMap = Parse-EnvFile $envPath
-            $token = $envMap["NGROK_AUTHTOKEN"]
-            Write-Host "Current Configuration Summary:" -ForegroundColor White
-            Write-Host "  - Port:           $($envMap['API_PORT'])" -ForegroundColor DarkCyan
-            Write-Host "  - Ngrok Enabled:  $($envMap['NGROK_ENABLED'])" -ForegroundColor DarkCyan
-            Write-Host "  - Ngrok Token:    $(Redact-Secret $token)" -ForegroundColor DarkCyan
-            Write-Host "  - Confidence:     $($envMap['CONFIDENCE_THRESHOLD'])" -ForegroundColor DarkCyan
-            Write-Host ""
-
-            $live = Get-ServerLiveStatus
-            if ($live.BackendOnline) {
-                $restart = Read-Host "Server is currently running. Restart now to apply new settings? (Y/N)"
-                if ($restart -match "^[Yy]") {
-                    Log-Info "Restarting server..."
-                    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir "stop.ps1")
-                    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir "start.ps1")
-                }
-            }
-            Read-Host "Press Enter to return to menu"
-        }
-
-        "^(7|[Kk])$" {
-            Write-Host ""
-            Write-Host "Ngrok Authtoken Setup:" -ForegroundColor White
-            Write-Host "  Sign up and get your free token from: https://dashboard.ngrok.com/get-started/your-authtoken" -ForegroundColor DarkGray
-            Write-Host ""
-            $tokenInput = Read-Host "Paste your Ngrok Authtoken (or press Enter to cancel)"
-            if ($tokenInput -and $tokenInput.Trim() -ne "") {
-                Set-EnvValue -EnvPath $envPath -Key "NGROK_AUTHTOKEN" -Value ($tokenInput.Trim())
-                Set-EnvValue -EnvPath $envPath -Key "NGROK_ENABLED" -Value "true"
-                Log-Success "Ngrok Authtoken saved and tunnel enabled in '$envPath'!"
-
-                $live = Get-ServerLiveStatus
-                if ($live.BackendOnline) {
-                    $restart = Read-Host "Server is running. Restart now to launch the public HTTPS tunnel? (Y/N)"
-                    if ($restart -match "^[Yy]") {
-                        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir "stop.ps1")
-                        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir "start.ps1")
+                "^[Dd]$" {
+                    Run-SubAction {
+                        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir "status.ps1")
+                        Write-Host ""
+                        Read-Host "Press Enter to return to HUD"
                     }
+                    $cachedOverlay = $null
                 }
-            } else {
-                Log-Info "Token update cancelled."
-            }
-            Read-Host "Press Enter to return to menu"
-        }
 
-        "^(8|[Bb])$" {
-            Write-Host ""
-            $envMap = Parse-EnvFile $envPath
-            $port = if ($envMap["API_PORT"]) { [int]$envMap["API_PORT"] } else { 8000 }
-            $live = Get-ServerLiveStatus -Port $port
+                "^[Vv]$" {
+                    Run-SubAction {
+                        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir "verify.ps1")
+                        Write-Host ""
+                        Read-Host "Press Enter to return to HUD"
+                    }
+                    $cachedOverlay = $null
+                }
 
-            $targetUrl = "http://localhost:$port"
-            if ($live.PublicUrl) {
-                Write-Host "Choose URL to open in browser:" -ForegroundColor White
-                Write-Host "  [1] Public Ngrok HTTPS: $($live.PublicUrl) (Recommended for mobile/camera testing)" -ForegroundColor Yellow
-                Write-Host "  [2] Localhost:          $targetUrl" -ForegroundColor White
-                $urlChoice = Read-Host "Choice [1/2, default 1]"
-                if ($urlChoice -ne "2") {
-                    $targetUrl = $live.PublicUrl
+                "^[Uu]$" {
+                    Run-SubAction {
+                        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir "update.ps1")
+                        Write-Host ""
+                        Read-Host "Press Enter to return to HUD"
+                    }
+                    $cachedOverlay = $null
+                }
+
+                "^(0|[Qq])$" {
+                    $keepRunning = $false
+                }
+
+                default {
+                    $cachedOverlay = $null
                 }
             }
-
-            Log-Info "Opening Vision Studio in default browser: $targetUrl"
-            Start-Process $targetUrl
-            Start-Sleep -Seconds 1
         }
 
-        "^(9|[Ll])$" {
-            Write-Host ""
-            Log-Info "Streaming live OptiCore container logs (Press Ctrl+C to return to menu)..."
-            Push-Location $ServerRoot
-            try {
-                & docker compose -f $composeFile logs -f --tail=50
-            } finally {
-                Pop-Location
-            }
-            Read-Host "Press Enter to return to menu"
-        }
-
-        "^[Dd]$" {
-            Write-Host ""
-            $statusScript = Join-Path $ScriptDir "status.ps1"
-            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $statusScript
-            Write-Host ""
-            Read-Host "Press Enter to return to menu"
-        }
-
-        "^[Vv]$" {
-            Write-Host ""
-            $verifyScript = Join-Path $ScriptDir "verify.ps1"
-            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $verifyScript
-            Write-Host ""
-            Read-Host "Press Enter to return to menu"
-        }
-
-        "^[Uu]$" {
-            Write-Host ""
-            $updateScript = Join-Path $ScriptDir "update.ps1"
-            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $updateScript
-            Write-Host ""
-            Read-Host "Press Enter to return to menu"
-        }
-
-        "^[Aa]$" {
-            Write-Host ""
-            Ensure-BrainVisualizerBackground
-            Log-Success "3D Neural Brain Visualizer companion is active and running in the background."
-            Start-Sleep -Seconds 1
-        }
-
-        "^(0|[Qq])$" {
-            Write-Host ""
-            Log-Info "Exiting OptiCore Control Center. Have a great day!"
-            $keepRunning = $false
-        }
-
-        default {
-            Log-Warn "Invalid selection '$choice'. Please choose an option from the menu."
-            Start-Sleep -Seconds 1
-        }
+        [System.Threading.Thread]::Sleep(33) # 30 FPS
     }
+} finally {
+    [Console]::CursorVisible = $true
+    [Console]::Write("`u001b[0m`u001b[2J`u001b[1;1H")
+    Write-Host "OptiCore AI Control Center closed. Have a productive day!" -ForegroundColor Cyan
 }
