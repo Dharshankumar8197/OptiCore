@@ -223,20 +223,17 @@ $targetBrowserUrl = if ($publicHttpsUrl) { $publicHttpsUrl } else { "http://loca
 
 Write-Host "Quick Actions:" -ForegroundColor Yellow
 Write-Host "  [B] Open Web Vision Studio in Default Browser ($targetBrowserUrl)" -ForegroundColor White
-Write-Host "  [A] Launch OptiCore AI Server Visualizer" -ForegroundColor Green
-Write-Host "  [M] Open Interactive Control Center (menu.bat)" -ForegroundColor White
+Write-Host "  [M] Open Interactive Control Center (menu.bat)" -ForegroundColor Green
 Write-Host "  [E] Open and Edit .env Configuration" -ForegroundColor White
 Write-Host "  [L] Stream Live Container Logs" -ForegroundColor White
 Write-Host "  [Q] Done / Return to PowerShell Prompt" -ForegroundColor White
 Write-Host ""
 
-$action = Read-Host "Select an action [B/A/M/E/L/Q] (default: B)"
+$action = Read-Host "Select an action [B/M/E/L/Q] (default: B)"
 if (-not $action -or $action.Trim() -eq "" -or $action -match "^[Bb]") {
     Log-Info "Opening Vision Studio: $targetBrowserUrl"
     Start-Process $targetBrowserUrl
-} elseif ($action -match "^[Aa]") {
-    Show-BrainAnimation -DurationSeconds 0 -HeaderText "OptiCore AI Server" -SubHeaderText "YOLO26s | 20 Classes Point Cloud" -BottomText "[B] Open Browser | [M] Menu | [Any Key] Return"
-} elseif ($action -match "^[Mm]") {
+} elseif ($action -match "^[Mm]" -or $action -match "^[Aa]") {
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir "menu.ps1")
 } elseif ($action -match "^[Ee]") {
     Open-EnvEditor -EnvPath $envPath

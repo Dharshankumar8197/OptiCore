@@ -26,16 +26,6 @@ if (-not (Test-Path $envPath)) {
 
 $esc = [char]27
 
-# Compile and Initialize BrainRenderer
-$csPath = Join-Path $ScriptDir "BrainRenderer.cs"
-if (-not ('BrainRenderer' -as [type])) {
-    if (Test-Path $csPath) {
-        Add-Type -Path $csPath -ErrorAction Stop
-    }
-}
-[BrainRenderer]::EnableVT()
-$renderer = New-Object BrainRenderer
-
 function Get-DashboardOverlayLines {
     $envMap = Parse-EnvFile $envPath
     $port = if ($envMap["API_PORT"]) { [int]$envMap["API_PORT"] } elseif ($envMap["PORT"]) { [int]$envMap["PORT"] } else { 8000 }
@@ -92,46 +82,94 @@ function Get-DashboardOverlayLines {
         " [4 / T] Toggle Ngrok ($ngrokToggleStatus) [D]     Diagnostics & Health",
         " [5 / C] Cycle Sensitivity ($conf)     [V]     Run 17-Point Suite",
         " [6 / E] Edit .env in Notepad          [U]     Pull Latest Docker Image",
-        " [0 / Q] Exit Control Center           [A]     Repaint Visualizer HUD",
+        " [0 / Q] Exit Control Center           [A]     Refresh Status Dashboard",
         "======================================================================",
-        " [Hotkeys: 1-9, S, X, R, T, C, E, K, B, L, D, V, U, Q] Tap any key..."
+        " [Hotkeys: 1-9, S, X, R, T, C, E, K, B, L, D, V, U, A, Q] Tap any key..."
     )
+}
+
+function Format-DashboardHUD {
+    param([string[]]$Lines, [int]$Width)
+    $sb = [System.Text.StringBuilder]::new()
+    $sb.Append("${esc}[?25l")
+    $row = 1
+    foreach ($line in $Lines) {
+        $sb.Append("${esc}[${row};1H")
+
+        if ($line -match "^={10,}") {
+            $sb.Append("${esc}[38;5;51m$line${esc}[0m")
+        } elseif ($line -match "^\+-{10,}") {
+            $sb.Append("${esc}[38;5;45m$line${esc}[0m")
+        } elseif ($line -match "^\|\s*SYSTEM STATUS DASHBOARD") {
+            $sb.Append("${esc}[38;5;45m|${esc}[1;38;5;51m SYSTEM STATUS DASHBOARD" + (" " * 44) + "${esc}[38;5;45m|${esc}[0m")
+        } elseif ($line -match "^\s*OptiCore\s*-") {
+            $sb.Append("${esc}[1;38;5;51m$line${esc}[0m")
+        } elseif ($line -match "^\s*YOLO26s best\.pt") {
+            $sb.Append("${esc}[38;5;37m$line${esc}[0m")
+        } elseif ($line -match "^\s*\[Hotkeys:") {
+            $sb.Append("${esc}[1;38;5;51m$line${esc}[0m")
+        } elseif ($line -match "^\s*\*") {
+            $styled = $line -replace "^\s*\*", "  ${esc}[38;5;226m*${esc}[0m"
+            $styled = $styled -replace "(\[(ACTIVE|READY[^\]]*|ONLINE[^\]]*)\])", "${esc}[1;38;5;46m`$1${esc}[0m"
+            $styled = $styled -replace "(\[(STOPPED|OFFLINE)\])", "${esc}[1;38;5;203m`$1${esc}[0m"
+            $styled = $styled -replace "(\[STANDBY\])", "${esc}[1;38;5;226m`$1${esc}[0m"
+            $styled = $styled -replace "(\[ENABLED[^\]]*\])", "${esc}[1;38;5;51m`$1${esc}[0m"
+            $styled = $styled -replace "(\[DISABLED[^\]]*\])", "${esc}[38;5;244m`$1${esc}[0m"
+            $sb.Append($styled)
+        } else {
+            $styled = [regex]::Replace($line, "\[([^\]]+)\]", "${esc}[1;38;5;45m[`$1]${esc}[0m")
+            $sb.Append($styled)
+        }
+        $sb.Append("${esc}[K")
+        $row++
+    }
+    for ($r = $row; $r -le [Math]::Max($row + 2, 28); $r++) {
+        $sb.Append("${esc}[${r};1H${esc}[K")
+    }
+    return $sb.ToString()
 }
 
 function Run-SubAction {
     param([scriptblock]$Action)
-    [Console]::CursorVisible = $true
-    [Console]::Write("$esc[0m$esc[2J$esc[1;1H")
+    try { [Console]::CursorVisible = $true } catch {}
+    try { [Console]::Write("${esc}[0m${esc}[2J${esc}[1;1H") } catch {}
     try {
         & $Action
     } finally {
-        [Console]::CursorVisible = $false
-        [Console]::Write("$esc[0m$esc[2J$esc[1;1H")
+        try { [Console]::CursorVisible = $false } catch {}
+        try { [Console]::Write("${esc}[0m${esc}[2J${esc}[1;1H") } catch {}
     }
 }
 
 $keepRunning = $true
-$stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 $lastOverlayFetch = [System.DateTime]::MinValue
 $cachedOverlay = $null
+$lastW = 0
+$lastH = 0
 
-[Console]::CursorVisible = $false
+try { [Console]::CursorVisible = $false } catch {}
+try { [Console]::Write("${esc}[0m${esc}[2J${esc}[1;1H") } catch {}
 
 try {
     while ($keepRunning) {
+        $w = try { [Math]::Max(72, [Console]::WindowWidth) } catch { 80 }
+        $h = try { [Math]::Max(26, [Console]::WindowHeight) } catch { 28 }
+
+        if ($w -ne $lastW -or $h -ne $lastH) {
+            $lastW = $w
+            $lastH = $h
+            try { [Console]::Write("${esc}[0m${esc}[2J${esc}[1;1H") } catch {}
+            $cachedOverlay = $null
+        }
+
         $now = [System.DateTime]::UtcNow
         if (($now - $lastOverlayFetch).TotalSeconds -ge 2.0 -or $null -eq $cachedOverlay) {
             $cachedOverlay = Get-DashboardOverlayLines
             $lastOverlayFetch = $now
+            $frame = Format-DashboardHUD -Lines $cachedOverlay -Width $w
+            try { [Console]::SetCursorPosition(0, 0) } catch {}
+            [Console]::Write($frame)
         }
-
-        $w = [Math]::Max(72, [Console]::WindowWidth)
-        $h = [Math]::Max(26, [Console]::WindowHeight)
-        $t = [double]$stopwatch.ElapsedMilliseconds / 1000.0
-
-        $frame = $renderer.RenderWithOverlay($t, $w, $h, $cachedOverlay, 1, 1, "")
-        [Console]::SetCursorPosition(0, 0)
-        [Console]::Write($frame)
 
         if ([Console]::KeyAvailable) {
             $key = [Console]::ReadKey($true)
@@ -268,6 +306,11 @@ try {
                     $cachedOverlay = $null
                 }
 
+                "^[Aa]$" {
+                    try { [Console]::Write("${esc}[0m${esc}[2J${esc}[1;1H") } catch {}
+                    $cachedOverlay = $null
+                }
+
                 "^(0|[Qq])$" {
                     $keepRunning = $false
                 }
@@ -278,10 +321,10 @@ try {
             }
         }
 
-        [System.Threading.Thread]::Sleep(33) # 30 FPS
+        [System.Threading.Thread]::Sleep(50)
     }
 } finally {
-    [Console]::CursorVisible = $true
-    [Console]::Write("$esc[0m$esc[2J$esc[1;1H")
+    try { [Console]::CursorVisible = $true } catch {}
+    try { [Console]::Write("${esc}[0m${esc}[2J${esc}[1;1H") } catch {}
     Write-Host "OptiCore AI Control Center closed. Have a productive day!" -ForegroundColor Cyan
 }
