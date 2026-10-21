@@ -65,6 +65,16 @@ class DetectionItem(BaseModel):
     tracking_id: Optional[int] = None
 
 
+class SafetyAlertItem(BaseModel):
+    """Directional hazard/safety alert."""
+    class_name: str
+    confidence: float
+    tracking_id: Optional[int] = None
+    direction: str  # left, ahead, right
+    urgency: str    # critical, high, moderate, low
+    message: str
+
+
 class DetectBase64Request(BaseModel):
     """Request payload for base64 image inference."""
     image_base64: str
@@ -72,6 +82,7 @@ class DetectBase64Request(BaseModel):
     iou_threshold: Optional[float] = None
     image_size: Optional[int] = None
     return_annotated: Optional[bool] = False
+    session_id: Optional[str] = None
 
 
 class DetectResponse(BaseModel):
@@ -84,9 +95,41 @@ class DetectResponse(BaseModel):
     image_width: int
     image_height: int
     detections: List[DetectionItem]
+    safety_alerts: Optional[List[SafetyAlertItem]] = None
+    session_id: Optional[str] = None
     annotated_image_base64: Optional[str] = None
     model_name: str
     is_mock: bool = False
+
+
+class TrackRequest(BaseModel):
+    """Request payload for session-based ByteTrack tracking."""
+    session_id: str
+    image_base64: str
+    confidence_threshold: Optional[float] = None
+    iou_threshold: Optional[float] = None
+    image_size: Optional[int] = None
+
+
+class ExplainRequest(BaseModel):
+    """Request payload for contextual scene explanation."""
+    detections: List[DetectionItem]
+    safety_alerts: Optional[List[SafetyAlertItem]] = None
+
+
+class ExplainResponse(BaseModel):
+    """Contextual scene explanation response."""
+    service: str
+    explanation: str
+    groq_enabled: bool
+
+
+class OCRResponse(BaseModel):
+    """Optical character recognition response."""
+    ocr_available: bool
+    message: str
+    text_detections: List[Dict[str, Any]]
+
 
 
 class ModelClassesResponse(BaseModel):

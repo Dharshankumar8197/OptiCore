@@ -33,3 +33,7 @@ aiofiles>=23.2.1
 # System Utilities
 psutil>=5.9.8
 python-dotenv>=1.0.1
+httpx>=0.27.0
+pyyaml>=6.0.1
+lapx>=0.5.5
+

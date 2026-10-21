@@ -32,28 +32,62 @@ app.add_middleware(
 )
 
 
+import os
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi import Request
+
+# Static files path
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+if os.path.exists(STATIC_DIR):
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
 @app.get("/")
-def read_root():
-    """Root endpoint."""
+def read_root(request: Request):
+    """Root endpoint serving embedded Vision Studio UI for browsers, or JSON for API clients."""
+    accept = request.headers.get("accept", "")
+    index_path = os.path.join(STATIC_DIR, "index.html")
+    if "text/html" in accept and os.path.exists(index_path):
+        return FileResponse(index_path)
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+
     return {
         "app": "OptiCore Backend",
         "status": "running",
         "version": settings.version,
         "docs": "/docs",
+        "ui": "/ui",
     }
+
+
+@app.get("/ui")
+def read_ui():
+    """Direct route to embedded OptiCore Vision Studio UI."""
+    index_path = os.path.join(STATIC_DIR, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return {"message": "UI not found"}
 
 
 @app.api_route("/health", methods=["GET", "HEAD"])
 def health():
-    """Health check endpoint for frontend status polling."""
-    from app.inference import is_model_loaded
+    """Comprehensive health check endpoint for Docker, ngrok, and frontend polling."""
+    from app.inference import is_model_loaded, get_model_metadata, get_model_error
+    loaded = is_model_loaded()
+    meta = get_model_metadata()
     return {
-        "status": "ok",
+        "status": "ok" if loaded else "degraded",
         "database": "ok",
-        "model_loaded": is_model_loaded(),
-        "model_status": "ready" if is_model_loaded() else "standby",
+        "model_loaded": loaded,
+        "model_status": "ready" if loaded else "standby",
+        "architecture": meta.get("architecture", "YOLO26s DetectionModel"),
+        "class_count": meta.get("class_count", 20),
         "version": settings.version,
+        "error": get_model_error(),
     }
+
 
 
 # Include routers

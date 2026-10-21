@@ -9,6 +9,27 @@
 
 ---
 
+## 🪟 Windows-First Portable AI Server (Docker Desktop + ngrok)
+
+Turn any Windows computer (Windows 10/11 x64 or **Snapdragon X Plus ARM64**) into an OptiCore AI inference server with **zero Python or PyTorch installation on client devices**:
+
+### ⚡ One-Command Windows PowerShell Installation:
+```powershell
+irm https://raw.githubusercontent.com/Dharshankumar8197/OptiCore/main/scripts/install-portable-server.ps1 | iex
+```
+
+> **Note on Initial Release**: The installation command downloads the pre-built `portable_server.zip` and verifies its SHA-256 checksum. If the release has not yet been published to GitHub Releases by the maintainer, clone this repo and run `.\build_portable_server.ps1` followed by `.\portable_server\install.bat`.
+
+### 📦 What's Included in `portable_server.zip`:
+* **Zero Client Setup**: No Python, PyTorch, or CUDA needed on your client devices (Android, iPhone, iPad, laptops).
+* **Actual Trained YOLO26s Model**: Runs your Kaggle-trained `best.pt` with 20 specialized mobility classes:
+  `person, car, bus, truck, motorcycle, bicycle, animal, door, stairs, pothole, crack, manhole, traffic_light, traffic_sign, pole, tree, bench, chair, waste_container, obstacle`
+* **Embedded Vision Studio Web UI**: Direct browser camera access, live canvas bounding boxes, and ByteTrack persistent IDs.
+* **On-Device Speech Advisory (TTS)**: Spoken directional warnings for road hazards and obstacles with a 4s cooldown.
+* **Launchers Included**: `menu.bat` / `run.bat` (Interactive Control Center with live system dashboard, animated load bars, 1-click toggles, and direct `.env` editing commands), `start.bat`, `stop.bat`, `status.bat`, `update.bat`, `uninstall.bat`.
+
+---
+
 ## ⚡ 1-Line Remote Backend Deployment (Any System)
 
 Run this single command on **any machine** (Windows, Linux, macOS, or Cloud VPS) to automatically pull or build the OptiCore Backend container, mount storage, and expose a secure public HTTPS Ngrok tunnel:
@@ -32,7 +53,7 @@ docker run -d \
   -p 4040:4040 \
   -e NGROK_AUTHTOKEN="your_token_here" \
   -v opticore_data:/app/data \
-  ghcr.io/dharshankumar8197/opticore-backend:latest
+  ghcr.io/dharshankumar8197/opticore-server:latest
 ```
 
 > **Public Access**: When started with `NGROK_AUTHTOKEN`, the container prints your live HTTPS URL (e.g. `https://xxxx.ngrok-free.app`), allowing mobile and remote devices to securely stream camera feeds and access the model.
@@ -190,5 +211,6 @@ OptiCore/
 
 ---
 
-## 📄 License
-MIT © [Dharshankumar8197](https://github.com/Dharshankumar8197)
+## 📄 License & Copyright
+MIT License — Copyright © 2026 **OptiCore Team** (https://github.com/Dharshankumar8197). All rights reserved.
+

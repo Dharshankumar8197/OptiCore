@@ -17,6 +17,10 @@ from app.schemas.model import (
     DetectResponse,
     DetectBase64Request,
     ModelClassesResponse,
+    TrackRequest,
+    ExplainRequest,
+    ExplainResponse,
+    OCRResponse,
 )
 from app.config import settings
 from app.inference import (
@@ -24,6 +28,10 @@ from app.inference import (
     get_model_classes,
     is_model_loaded,
     get_model,
+    get_model_metadata,
+    get_model_error,
+    explain_scene_with_groq,
+    run_ocr_on_image,
 )
 
 router = APIRouter(prefix="/api/model", tags=["model"])
@@ -146,6 +154,24 @@ def update_model_config(
     return config
 
 
+@router.get("/health")
+def get_model_health():
+    """Get model readiness and hardware acceleration status."""
+    loaded = is_model_loaded()
+    meta = get_model_metadata()
+    error = get_model_error()
+    return {
+        "status": "ready" if loaded else "degraded",
+        "model_loaded": loaded,
+        "model_path": settings.model_path,
+        "architecture": meta.get("architecture", "YOLO26s DetectionModel"),
+        "class_count": meta.get("class_count", 20),
+        "task": meta.get("task", "detect"),
+        "error": error,
+        "classes_verified": loaded and meta.get("class_count") == 20,
+    }
+
+
 @router.post("/detect", response_model=DetectResponse)
 async def detect_from_file(
     file: UploadFile = File(...),
@@ -153,8 +179,9 @@ async def detect_from_file(
     iou_threshold: Optional[float] = Form(None),
     image_size: Optional[int] = Form(None),
     return_annotated: Optional[bool] = Form(False),
+    session_id: Optional[str] = Form(None),
 ):
-    """Run object detection on an uploaded image file."""
+    """Run object detection and optional ByteTrack tracking on an uploaded image file."""
     try:
         contents = await file.read()
         if not contents:
@@ -166,8 +193,13 @@ async def detect_from_file(
             iou_threshold=iou_threshold,
             image_size=image_size,
             return_annotated=return_annotated or False,
+            session_id=session_id,
         )
         return result
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except RuntimeError as re:
+        raise HTTPException(status_code=503, detail=str(re))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Inference error: {str(e)}")
 
@@ -190,10 +222,68 @@ async def detect_from_base64(payload: DetectBase64Request):
             iou_threshold=payload.iou_threshold,
             image_size=payload.image_size,
             return_annotated=payload.return_annotated or False,
+            session_id=payload.session_id,
         )
         return result
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except RuntimeError as re:
+        raise HTTPException(status_code=503, detail=str(re))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Inference error: {str(e)}")
+
+
+@router.post("/track", response_model=DetectResponse)
+async def track_video_frame(payload: TrackRequest):
+    """Run ByteTrack tracking on an incoming video frame with isolated session tracking."""
+    try:
+        raw_b64 = payload.image_base64
+        if "," in raw_b64:
+            raw_b64 = raw_b64.split(",", 1)[1]
+
+        image_bytes = base64.b64decode(raw_b64)
+        if not image_bytes:
+            raise HTTPException(status_code=400, detail="Invalid base64 image data")
+
+        result = run_detection(
+            image_bytes=image_bytes,
+            confidence_threshold=payload.confidence_threshold,
+            iou_threshold=payload.iou_threshold,
+            image_size=payload.image_size,
+            session_id=payload.session_id,
+        )
+        return result
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except RuntimeError as re:
+        raise HTTPException(status_code=503, detail=str(re))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Tracking error: {str(e)}")
+
+
+@router.post("/explain", response_model=ExplainResponse)
+async def explain_detections(payload: ExplainRequest):
+    """Generate contextual guidance for detections using Groq or local rule engine."""
+    try:
+        det_dicts = [d.model_dump() for d in payload.detections]
+        alert_dicts = [a.model_dump() for a in payload.safety_alerts] if payload.safety_alerts else []
+        res = await explain_scene_with_groq(det_dicts, alert_dicts)
+        return ExplainResponse(**res)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Explanation error: {str(e)}")
+
+
+@router.post("/ocr", response_model=OCRResponse)
+async def run_ocr_endpoint(file: UploadFile = File(...)):
+    """Run on-demand PaddleOCR if available, returning graceful notice if not installed."""
+    try:
+        contents = await file.read()
+        if not contents:
+            raise HTTPException(status_code=400, detail="Empty image file received")
+        res = run_ocr_on_image(contents)
+        return OCRResponse(**res)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"OCR error: {str(e)}")
 
 
 @router.get("/sessions", response_model=List[InferenceSessionResponse])
@@ -211,3 +301,4 @@ def list_inference_sessions(
         .all()
     )
     return sessions
+

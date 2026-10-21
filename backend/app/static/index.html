@@ -1,0 +1,1289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>OptiCore — Portable AI Inference Server</title>
+  <meta name="description" content="Windows-First Portable AI Inference Server powered by Docker Desktop, YOLO26s, and ngrok.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #070A0F;
+      --card-bg: rgba(14, 20, 31, 0.72);
+      --card-border: rgba(30, 48, 77, 0.45);
+      --accent: #00F0FF;
+      --accent-glow: rgba(0, 240, 255, 0.25);
+      --success: #10B981;
+      --warning: #F59E0B;
+      --danger: #EF4444;
+      --text: #F3F4F6;
+      --text-muted: #94A3B8;
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: var(--bg);
+      background-image: 
+        radial-gradient(circle at 15% 15%, rgba(0, 240, 255, 0.05) 0%, transparent 40%),
+        radial-gradient(circle at 85% 85%, rgba(16, 185, 129, 0.04) 0%, transparent 40%);
+      color: var(--text);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    header {
+      backdrop-filter: blur(16px);
+      background: rgba(7, 10, 15, 0.85);
+      border-bottom: 1px solid var(--card-border);
+      padding: 0.85rem 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .brand-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, var(--accent), #3B82F6);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #000;
+      font-weight: 800;
+      font-family: var(--font-mono);
+      font-size: 1.1rem;
+      box-shadow: 0 0 16px var(--accent-glow);
+    }
+
+    .brand-text h1 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #fff;
+    }
+
+    .brand-text p {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    .status-badges {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.25rem 0.65rem;
+      border-radius: 9999px;
+      font-size: 0.72rem;
+      font-family: var(--font-mono);
+      font-weight: 500;
+      background: rgba(14, 20, 31, 0.8);
+      border: 1px solid var(--card-border);
+    }
+
+    .badge-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+    }
+
+    .badge-dot.online { background: var(--success); box-shadow: 0 0 8px var(--success); }
+    .badge-dot.offline { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+    .badge-dot.amber { background: var(--warning); box-shadow: 0 0 8px var(--warning); }
+
+    main {
+      flex: 1;
+      padding: 1.25rem;
+      max-width: 1380px;
+      margin: 0 auto;
+      width: 100%;
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 1.25rem;
+    }
+
+    @media (max-width: 1024px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .viewport-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .glass-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      backdrop-filter: blur(12px);
+      padding: 1rem;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.85rem;
+    }
+
+    .card-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+    }
+
+    .tab-bar {
+      display: flex;
+      gap: 0.5rem;
+      background: rgba(7, 10, 15, 0.6);
+      padding: 0.3rem;
+      border-radius: 8px;
+      border: 1px solid var(--card-border);
+      margin-bottom: 0.75rem;
+    }
+
+    .tab-btn {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 0.45rem 0.75rem;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+
+    .tab-btn.active {
+      background: rgba(0, 240, 255, 0.15);
+      color: var(--accent);
+      border: 1px solid rgba(0, 240, 255, 0.3);
+    }
+
+    .viewport-container {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16/9;
+      background: #020408;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid var(--card-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #camera-video, #preview-image {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+
+    #overlay-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    .hud-metrics {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .hud-chip {
+      background: rgba(7, 10, 15, 0.85);
+      border: 1px solid rgba(0, 240, 255, 0.35);
+      backdrop-filter: blur(6px);
+      padding: 0.25rem 0.55rem;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: #fff;
+    }
+
+    .hud-chip span { color: var(--accent); font-weight: 700; }
+
+    .control-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-top: 0.75rem;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.55rem 1rem;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.2s;
+      font-family: var(--font-sans);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #00D8E6, #0284C7);
+      color: #000;
+      box-shadow: 0 4px 14px var(--accent-glow);
+    }
+    .btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
+
+    .btn-secondary {
+      background: rgba(30, 48, 77, 0.4);
+      border-color: var(--card-border);
+      color: var(--text);
+    }
+    .btn-secondary:hover { background: rgba(30, 48, 77, 0.7); }
+
+    .btn-danger {
+      background: rgba(239, 68, 68, 0.15);
+      border-color: rgba(239, 68, 68, 0.4);
+      color: #F87171;
+    }
+
+    select, input[type="text"], input[type="number"] {
+      background: rgba(7, 10, 15, 0.7);
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      padding: 0.5rem 0.75rem;
+      color: var(--text);
+      font-size: 0.82rem;
+      font-family: var(--font-sans);
+      outline: none;
+    }
+    select:focus, input:focus { border-color: var(--accent); }
+
+    .sidebar-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.65rem;
+    }
+
+    .stat-box {
+      background: rgba(7, 10, 15, 0.6);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 0.65rem;
+    }
+
+    .stat-label {
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+      margin-bottom: 0.2rem;
+    }
+
+    .stat-val {
+      font-size: 1.15rem;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      color: #fff;
+    }
+
+    .stat-val.accent { color: var(--accent); }
+
+    .slider-group {
+      margin-bottom: 0.85rem;
+    }
+
+    .slider-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      margin-bottom: 0.35rem;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      height: 5px;
+      background: var(--card-border);
+      border-radius: 3px;
+      outline: none;
+      -webkit-appearance: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      box-shadow: 0 0 8px var(--accent);
+    }
+
+    .hazard-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .hazard-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 0.75rem;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      background: rgba(239, 68, 68, 0.08);
+      border-left: 3px solid var(--danger);
+    }
+
+    .hazard-item.high {
+      background: rgba(245, 158, 11, 0.08);
+      border-left-color: var(--warning);
+    }
+
+    .class-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      max-height: 140px;
+      overflow-y: auto;
+    }
+
+    .class-tag {
+      font-size: 0.68rem;
+      font-family: var(--font-mono);
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      background: rgba(14, 20, 31, 0.9);
+      border: 1px solid var(--card-border);
+      color: var(--text-muted);
+    }
+
+    .class-tag.active {
+      color: var(--accent);
+      border-color: rgba(0, 240, 255, 0.4);
+      background: rgba(0, 240, 255, 0.08);
+    }
+
+    .dropzone {
+      border: 2px dashed var(--card-border);
+      border-radius: 10px;
+      padding: 2.5rem 1rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: rgba(7, 10, 15, 0.3);
+    }
+
+    .dropzone:hover, .dropzone.dragover {
+      border-color: var(--accent);
+      background: rgba(0, 240, 255, 0.04);
+    }
+
+    .dropzone-icon {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .dropzone-text {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .dropzone-text strong { color: var(--accent); }
+
+    .tts-indicator {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.45rem 0.75rem;
+      background: rgba(16, 185, 129, 0.08);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      border-radius: 6px;
+      font-size: 0.75rem;
+      color: var(--success);
+    }
+
+    /* Ambient Background Animation */
+    .ambient-background {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .ambient-orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(100px);
+      opacity: 0.18;
+      will-change: transform;
+      animation: floatOrb 25s ease-in-out infinite alternate;
+    }
+
+    .orb-1 {
+      width: 480px;
+      height: 480px;
+      background: radial-gradient(circle, #00F0FF, #3B82F6);
+      top: -80px;
+      left: -80px;
+      animation-duration: 22s;
+    }
+
+    .orb-2 {
+      width: 520px;
+      height: 520px;
+      background: radial-gradient(circle, #8B5CF6, #EC4899);
+      bottom: -100px;
+      right: -100px;
+      animation-duration: 28s;
+      animation-delay: -6s;
+    }
+
+    .orb-3 {
+      width: 380px;
+      height: 380px;
+      background: radial-gradient(circle, #10B981, #06B6D4);
+      top: 45%;
+      left: 55%;
+      animation-duration: 32s;
+      animation-delay: -12s;
+    }
+
+    .ambient-grid {
+      position: absolute;
+      inset: 0;
+      background-image: 
+        linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+      background-size: 44px 44px;
+      mask-image: radial-gradient(ellipse at center, rgba(0,0,0,0.7) 0%, transparent 80%);
+      -webkit-mask-image: radial-gradient(ellipse at center, rgba(0,0,0,0.7) 0%, transparent 80%);
+      pointer-events: none;
+    }
+
+    @keyframes floatOrb {
+      0% {
+        transform: translate3d(0, 0, 0) scale(1);
+      }
+      50% {
+        transform: translate3d(50px, 40px, 0) scale(1.06);
+      }
+      100% {
+        transform: translate3d(-35px, 60px, 0) scale(0.96);
+      }
+    }
+
+    header, main, footer {
+      position: relative;
+      z-index: 1;
+    }
+
+    footer {
+      text-align: center;
+      padding: 1.5rem;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      border-top: 1px solid var(--card-border);
+      background: rgba(7, 10, 15, 0.6);
+      backdrop-filter: blur(8px);
+    }
+
+    footer strong {
+      color: var(--accent);
+    }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <div class="ambient-background" aria-hidden="true">
+    <div class="ambient-orb orb-1"></div>
+    <div class="ambient-orb orb-2"></div>
+    <div class="ambient-orb orb-3"></div>
+    <div class="ambient-grid"></div>
+  </div>
+
+  <header>
+    <div class="brand">
+      <div class="brand-icon">Ω</div>
+      <div class="brand-text">
+        <h1>OptiCore Inference Server</h1>
+        <p id="server-meta">YOLO26s · 20 Classes · Docker Desktop</p>
+      </div>
+    </div>
+    <div class="status-badges">
+      <div class="badge" id="backend-badge">
+        <span class="badge-dot offline" id="backend-dot"></span>
+        <span id="backend-text">Connecting...</span>
+      </div>
+      <div class="badge" id="model-badge">
+        <span class="badge-dot offline" id="model-dot"></span>
+        <span id="model-text">Model: Standby</span>
+      </div>
+      <div class="badge" id="tunnel-badge">
+        <span class="badge-dot amber"></span>
+        <span id="tunnel-text">Host Server</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Left panel: Viewport & Stream -->
+    <div class="viewport-panel">
+      <div class="tab-bar">
+        <button class="tab-btn active" id="tab-cam-btn" onclick="switchTab('camera')">📹 Live Camera Feed</button>
+        <button class="tab-btn" id="tab-upload-btn" onclick="switchTab('upload')">📁 Drag & Drop Image</button>
+        <button class="tab-btn" id="tab-presets-btn" onclick="switchTab('presets')">⚡ 1-Click Presets</button>
+      </div>
+
+      <div class="glass-card">
+        <div class="viewport-container" id="viewport-wrap">
+          <div class="hud-metrics">
+            <div class="hud-chip">FPS: <span id="hud-fps">0.0</span></div>
+            <div class="hud-chip">LATENCY: <span id="hud-latency">0 ms</span></div>
+            <div class="hud-chip">OBJECTS: <span id="hud-objects">0</span></div>
+            <div class="hud-chip">TRACKS: <span id="hud-tracks">0</span></div>
+          </div>
+
+          <!-- Video element for live camera -->
+          <video id="camera-video" playsinline autoplay muted></video>
+
+          <!-- Image element for static uploads / presets -->
+          <img id="preview-image" class="hidden" alt="Inference Preview">
+
+          <!-- Real-time HUD bounding box overlay canvas -->
+          <canvas id="overlay-canvas"></canvas>
+        </div>
+
+        <!-- Controls for Live Camera -->
+        <div id="camera-controls">
+          <div class="control-row">
+            <button class="btn btn-primary" id="start-cam-btn" onclick="toggleCamera()">📷 Start Camera</button>
+            <button class="btn btn-secondary" id="detect-frame-btn" onclick="detectCurrentFrame()" disabled>⚡ Detect Frame</button>
+            <button class="btn btn-secondary" id="auto-scan-btn" onclick="toggleAutoScan()" disabled>🔄 Start Auto-Scan</button>
+            
+            <select id="camera-select" onchange="onCameraSelected()" style="max-width: 180px;">
+              <option value="">Default Camera</option>
+            </select>
+
+            <select id="fps-select" onchange="updateScanFps()" style="max-width: 110px;">
+              <option value="1">1 FPS</option>
+              <option value="2" selected>2 FPS</option>
+              <option value="5">5 FPS</option>
+              <option value="10">10 FPS</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Controls for Upload tab -->
+        <div id="upload-controls" class="hidden">
+          <div class="dropzone" id="dropzone" onclick="document.getElementById('file-input').click()">
+            <div class="dropzone-icon">📥</div>
+            <p class="dropzone-text"><strong>Click to upload</strong> or drag and drop image here</p>
+            <p style="font-size:0.72rem; color: var(--text-muted); margin-top:0.3rem;">JPEG, PNG, WEBP (Max 15MB)</p>
+          </div>
+          <input type="file" id="file-input" accept="image/*" class="hidden" onchange="handleFileSelect(event)">
+        </div>
+
+        <!-- Controls for Presets tab -->
+        <div id="presets-controls" class="hidden">
+          <div class="control-row">
+            <button class="btn btn-secondary" onclick="loadSyntheticPreset('urban')">🚗 Urban Avenue (Vehicles & Pedestrians)</button>
+            <button class="btn btn-secondary" onclick="loadSyntheticPreset('hazard')">⚠️ Road Hazards (Pothole & Manhole)</button>
+            <button class="btn btn-secondary" onclick="loadSyntheticPreset('indoor')">🚪 Indoor Navigation (Door & Stairs)</button>
+          </div>
+        </div>
+
+        <!-- Speech Synthesis Audio Advisory -->
+        <div class="control-row" style="margin-top: 1rem; justify-content: space-between;">
+          <div class="tts-indicator">
+            <label style="display:flex; align-items:center; gap:0.4rem; cursor:pointer;">
+              <input type="checkbox" id="tts-toggle" checked>
+              <span>🔊 Speech Synthesis Alerts (TTS)</span>
+            </label>
+          </div>
+          <button class="btn btn-secondary" onclick="requestGroqExplanation()">🧠 Contextual AI Guidance</button>
+        </div>
+
+        <div id="scene-explanation" style="font-size: 0.8rem; color: #E2E8F0; margin-top: 0.75rem; background: rgba(7, 10, 15, 0.5); padding: 0.65rem; border-radius: 6px; border: 1px solid var(--card-border); font-family: var(--font-sans);">
+          💡 Advisory: Camera standing by. Detected road hazards and obstacles will trigger audio prompts.
+        </div>
+      </div>
+    </div>
+
+    <!-- Right panel: Controls & Detection Info -->
+    <div class="sidebar-panel">
+      <!-- Performance Metrics -->
+      <div class="glass-card">
+        <div class="card-header">
+          <span class="card-title">⚡ Latency Breakdown</span>
+        </div>
+        <div class="stat-grid">
+          <div class="stat-box">
+            <div class="stat-label">Preprocess</div>
+            <div class="stat-val" id="stat-pre">0.0 ms</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Inference</div>
+            <div class="stat-val accent" id="stat-infer">0.0 ms</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Postprocess</div>
+            <div class="stat-val" id="stat-post">0.0 ms</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Total Time</div>
+            <div class="stat-val" id="stat-total">0.0 ms</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Detection Parameters -->
+      <div class="glass-card">
+        <div class="card-header">
+          <span class="card-title">⚙️ Inference Parameters</span>
+        </div>
+
+        <div class="slider-group">
+          <div class="slider-label">
+            <span>Confidence Threshold</span>
+            <span id="conf-val">50%</span>
+          </div>
+          <input type="range" id="conf-slider" min="10" max="95" value="50" oninput="updateParam('conf', this.value)">
+        </div>
+
+        <div class="slider-group">
+          <div class="slider-label">
+            <span>IoU (NMS Threshold)</span>
+            <span id="iou-val">45%</span>
+          </div>
+          <input type="range" id="iou-slider" min="10" max="95" value="45" oninput="updateParam('iou', this.value)">
+        </div>
+
+        <div class="slider-group">
+          <div class="slider-label">
+            <span>Inference Size</span>
+            <span id="imgsz-val">640 px</span>
+          </div>
+          <input type="range" id="imgsz-slider" min="320" max="1280" step="32" value="640" oninput="updateParam('imgsz', this.value)">
+        </div>
+      </div>
+
+      <!-- Active Hazards & Navigation Warnings -->
+      <div class="glass-card">
+        <div class="card-header">
+          <span class="card-title">⚠️ Mobility Hazards (<span id="hazard-count">0</span>)</span>
+        </div>
+        <div class="hazard-list" id="hazard-list">
+          <p style="font-size:0.75rem; color:var(--text-muted);">No active hazards detected.</p>
+        </div>
+      </div>
+
+      <!-- OptiCore 20 Classes Recognized -->
+      <div class="glass-card">
+        <div class="card-header">
+          <span class="card-title">🏷️ Model Classes (20)</span>
+        </div>
+        <div class="class-grid" id="class-grid"></div>
+      </div>
+
+      <!-- Server & Ngrok URL -->
+      <div class="glass-card">
+        <div class="card-header">
+          <span class="card-title">🌐 Inference Server URL</span>
+        </div>
+        <input type="text" id="api-url-input" style="width: 100%; margin-bottom: 0.5rem;" placeholder="http://localhost:8000">
+        <div style="display:flex; gap:0.5rem;">
+          <button class="btn btn-secondary" style="flex:1;" onclick="saveApiUrl()">Save</button>
+          <button class="btn btn-secondary" onclick="checkHealth()">Test Health</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    OptiCore Portable AI Server · YOLO26s (20 Classes) · Copyright © 2026 <strong>OptiCore Team</strong>. All rights reserved.
+  </footer>
+
+  <script>
+    // ── Application State ─────────────────────────────────────────────────────────
+    const state = {
+      apiUrl: window.location.origin.replace(/\/+$/, ''),
+      modelLoaded: false,
+      modelName: 'best.pt',
+      classes: {},
+      sessionId: 'sess_' + Math.random().toString(36).substring(2, 10),
+      isScanning: false,
+      scanInterval: null,
+      sampleFps: 2,
+      confidence: 0.50,
+      iou: 0.45,
+      imageSize: 640,
+      videoStream: null,
+      lastSpokenText: '',
+      lastSpokenTime: 0,
+      lastDetections: [],
+      lastAlerts: [],
+      ttsCooldownMs: 4000,
+    };
+
+    // Color palette for 20 classes
+    const CLASS_COLORS = {
+      person: '#00F0FF',
+      car: '#3B82F6', bus: '#2563EB', truck: '#1D4ED8', motorcycle: '#60A5FA', bicycle: '#93C5FD',
+      animal: '#FBBF24',
+      door: '#A855F7', stairs: '#EC4899',
+      pothole: '#EF4444', crack: '#F87171', manhole: '#FB923C',
+      traffic_light: '#34D399', traffic_sign: '#10B981',
+      pole: '#64748B', tree: '#059669', bench: '#8B5CF6', chair: '#7C3AED',
+      waste_container: '#D97706', obstacle: '#F43F5E'
+    };
+
+    // ── Initialization ───────────────────────────────────────────────────────────
+    window.addEventListener('DOMContentLoaded', async () => {
+      const savedApi = localStorage.getItem('opticore_api_url');
+      if (savedApi && savedApi.trim()) {
+        state.apiUrl = savedApi.trim().replace(/\/+$/, '');
+      }
+      document.getElementById('api-url-input').value = state.apiUrl;
+
+      await checkHealth();
+      await fetchModelClasses();
+      populateCameraList();
+      setupDropzone();
+    });
+
+    // ── API Helpers ─────────────────────────────────────────────────────────────
+    function saveApiUrl() {
+      const val = document.getElementById('api-url-input').value.trim().replace(/\/+$/, '');
+      if (val) {
+        state.apiUrl = val;
+        localStorage.setItem('opticore_api_url', val);
+        checkHealth();
+      }
+    }
+
+    async function checkHealth() {
+      try {
+        const res = await fetch(`${state.apiUrl}/health`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        document.getElementById('backend-dot').className = 'badge-dot online';
+        document.getElementById('backend-text').innerText = 'Backend: Online';
+
+        if (data.model_loaded) {
+          state.modelLoaded = true;
+          document.getElementById('model-dot').className = 'badge-dot online';
+          document.getElementById('model-text').innerText = 'Model: Ready (20 Classes)';
+        } else {
+          document.getElementById('model-dot').className = 'badge-dot amber';
+          document.getElementById('model-text').innerText = 'Model: Standby';
+        }
+
+        if (window.location.hostname.includes('ngrok')) {
+          document.getElementById('tunnel-text').innerText = 'Ngrok Public HTTPS';
+        }
+      } catch (err) {
+        document.getElementById('backend-dot').className = 'badge-dot offline';
+        document.getElementById('backend-text').innerText = 'Backend: Offline';
+        document.getElementById('model-dot').className = 'badge-dot offline';
+        document.getElementById('model-text').innerText = 'Model: Offline';
+      }
+    }
+
+    async function fetchModelClasses() {
+      try {
+        const res = await fetch(`${state.apiUrl}/api/model/classes`);
+        if (!res.ok) return;
+        const data = await res.json();
+        state.classes = data.classes || {};
+
+        const grid = document.getElementById('class-grid');
+        grid.innerHTML = '';
+        for (const [id, name] of Object.entries(state.classes)) {
+          const tag = document.createElement('span');
+          tag.className = 'class-tag';
+          tag.id = `class-tag-${name}`;
+          tag.innerText = `${id}: ${name}`;
+          grid.appendChild(tag);
+        }
+      } catch (e) {
+        console.warn('Could not fetch classes:', e);
+      }
+    }
+
+    // ── Tab Management ───────────────────────────────────────────────────────────
+    function switchTab(tab) {
+      document.getElementById('tab-cam-btn').className = tab === 'camera' ? 'tab-btn active' : 'tab-btn';
+      document.getElementById('tab-upload-btn').className = tab === 'upload' ? 'tab-btn active' : 'tab-btn';
+      document.getElementById('tab-presets-btn').className = tab === 'presets' ? 'tab-btn active' : 'tab-btn';
+
+      document.getElementById('camera-controls').classList.toggle('hidden', tab !== 'camera');
+      document.getElementById('upload-controls').classList.toggle('hidden', tab !== 'upload');
+      document.getElementById('presets-controls').classList.toggle('hidden', tab !== 'presets');
+
+      const video = document.getElementById('camera-video');
+      const img = document.getElementById('preview-image');
+
+      if (tab === 'camera') {
+        video.classList.remove('hidden');
+        img.classList.add('hidden');
+      } else {
+        video.classList.add('hidden');
+        img.classList.remove('hidden');
+        stopAutoScan();
+      }
+    }
+
+    // ── Camera & Video Streaming ─────────────────────────────────────────────────
+    async function populateCameraList() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const select = document.getElementById('camera-select');
+        select.innerHTML = '<option value="">Default Camera</option>';
+        devices.filter(d => d.kind === 'videoinput').forEach((cam, i) => {
+          const opt = document.createElement('option');
+          opt.value = cam.deviceId;
+          opt.text = cam.label || `Camera ${i + 1}`;
+          select.appendChild(opt);
+        });
+      } catch (e) {
+        console.warn('Enumerate devices error:', e);
+      }
+    }
+
+    async function toggleCamera() {
+      const btn = document.getElementById('start-cam-btn');
+      if (state.videoStream) {
+        stopCamera();
+        btn.innerText = '📷 Start Camera';
+        btn.className = 'btn btn-primary';
+        document.getElementById('detect-frame-btn').disabled = true;
+        document.getElementById('auto-scan-btn').disabled = true;
+      } else {
+        await startCamera();
+        if (state.videoStream) {
+          btn.innerText = '⏹ Stop Camera';
+          btn.className = 'btn btn-danger';
+          document.getElementById('detect-frame-btn').disabled = false;
+          document.getElementById('auto-scan-btn').disabled = false;
+        }
+      }
+    }
+
+    async function startCamera(deviceId = null) {
+      stopCamera();
+      const constraints = {
+        video: {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          facingMode: deviceId ? undefined : { ideal: 'environment' },
+          deviceId: deviceId ? { exact: deviceId } : undefined
+        },
+        audio: false
+      };
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        state.videoStream = stream;
+        const video = document.getElementById('camera-video');
+        video.srcObject = stream;
+        await video.play();
+        populateCameraList();
+      } catch (err) {
+        alert('Could not open camera: ' + err.message + '\nNote: Remote devices require an HTTPS context (e.g. ngrok).');
+      }
+    }
+
+    function stopCamera() {
+      stopAutoScan();
+      if (state.videoStream) {
+        state.videoStream.getTracks().forEach(t => t.stop());
+        state.videoStream = null;
+      }
+    }
+
+    function onCameraSelected() {
+      const sel = document.getElementById('camera-select').value;
+      if (state.videoStream) {
+        startCamera(sel || null);
+      }
+    }
+
+    // ── Frame Capture & Inference ────────────────────────────────────────────────
+    function captureVideoFrameBase64() {
+      const video = document.getElementById('camera-video');
+      if (!video || !video.videoWidth) return null;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL('image/jpeg', 0.82);
+    }
+
+    async function detectCurrentFrame() {
+      const b64 = captureVideoFrameBase64();
+      if (!b64) return;
+      await runInferenceOnBase64(b64);
+    }
+
+    function toggleAutoScan() {
+      if (state.isScanning) {
+        stopAutoScan();
+      } else {
+        startAutoScan();
+      }
+    }
+
+    function startAutoScan() {
+      state.isScanning = true;
+      const btn = document.getElementById('auto-scan-btn');
+      btn.innerText = '⏹ Stop Auto-Scan';
+      btn.className = 'btn btn-danger';
+
+      const intervalMs = Math.round(1000 / state.sampleFps);
+      state.scanInterval = setInterval(async () => {
+        if (!state.isScanning) return;
+        const b64 = captureVideoFrameBase64();
+        if (b64) await runInferenceOnBase64(b64);
+      }, intervalMs);
+    }
+
+    function stopAutoScan() {
+      state.isScanning = false;
+      if (state.scanInterval) {
+        clearInterval(state.scanInterval);
+        state.scanInterval = null;
+      }
+      const btn = document.getElementById('auto-scan-btn');
+      if (btn) {
+        btn.innerText = '🔄 Start Auto-Scan';
+        btn.className = 'btn btn-secondary';
+      }
+    }
+
+    function updateScanFps() {
+      state.sampleFps = parseInt(document.getElementById('fps-select').value, 10);
+      if (state.isScanning) {
+        stopAutoScan();
+        startAutoScan();
+      }
+    }
+
+    async function runInferenceOnBase64(imageB64) {
+      try {
+        const payload = {
+          session_id: state.sessionId,
+          image_base64: imageB64,
+          confidence_threshold: state.confidence,
+          iou_threshold: state.iou,
+          image_size: state.imageSize,
+        };
+
+        const t0 = performance.now();
+        const res = await fetch(`${state.apiUrl}/api/model/track`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || `Server returned ${res.status}`);
+        }
+
+        const data = await res.json();
+        const roundTripMs = Math.round(performance.now() - t0);
+        updateResults(data, roundTripMs);
+
+      } catch (err) {
+        console.error('Inference error:', err);
+      }
+    }
+
+    // ── Drawing Bounding Boxes & HUD ─────────────────────────────────────────────
+    function updateResults(data, roundTripMs) {
+      state.lastDetections = data.detections || [];
+      state.lastAlerts = data.safety_alerts || [];
+
+      // Update HUD Metrics
+      document.getElementById('hud-fps').innerText = roundTripMs > 0 ? (1000 / roundTripMs).toFixed(1) : '0.0';
+      document.getElementById('hud-latency').innerText = `${data.total_time_ms} ms`;
+      document.getElementById('hud-objects').innerText = data.detection_count;
+
+      const trackCount = state.lastDetections.filter(d => d.tracking_id !== null).length;
+      document.getElementById('hud-tracks').innerText = trackCount;
+
+      // Update Stat Boxes
+      document.getElementById('stat-pre').innerText = `${data.preprocess_ms} ms`;
+      document.getElementById('stat-infer').innerText = `${data.inference_time_ms} ms`;
+      document.getElementById('stat-post').innerText = `${data.postprocess_ms} ms`;
+      document.getElementById('stat-total').innerText = `${data.total_time_ms} ms`;
+
+      // Draw overlay
+      renderCanvasOverlay(data.detections, data.image_width, data.image_height);
+
+      // Render hazard alerts & handle TTS
+      renderHazards(data.safety_alerts);
+      handleSpeechAdvisory(data.safety_alerts);
+    }
+
+    function renderCanvasOverlay(detections, imgWidth, imgHeight) {
+      const canvas = document.getElementById('overlay-canvas');
+      const wrap = document.getElementById('viewport-wrap');
+
+      canvas.width = wrap.clientWidth;
+      canvas.height = wrap.clientHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (!detections || detections.length === 0) return;
+
+      const scaleX = canvas.width / 100;
+      const scaleY = canvas.height / 100;
+
+      detections.forEach(det => {
+        const nb = det.normalized_box;
+        const x = nb.x * scaleX;
+        const y = nb.y * scaleY;
+        const w = nb.width * scaleX;
+        const h = nb.height * scaleY;
+
+        const color = CLASS_COLORS[det.class_name] || '#00F0FF';
+
+        // Draw Bounding Box with glow
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 8;
+        ctx.strokeRect(x, y, w, h);
+        ctx.shadowBlur = 0;
+
+        // Label Tag
+        const trackTxt = det.tracking_id !== null ? `#${det.tracking_id} ` : '';
+        const label = `${trackTxt}${det.class_name} ${Math.round(det.confidence * 100)}%`;
+
+        ctx.font = '600 11px Inter, sans-serif';
+        const textWidth = ctx.measureText(label).width;
+        const tagH = 18;
+
+        ctx.fillStyle = color;
+        ctx.fillRect(x, Math.max(0, y - tagH), textWidth + 8, tagH);
+
+        ctx.fillStyle = '#000';
+        ctx.fillText(label, x + 4, Math.max(12, y - 4));
+      });
+    }
+
+    function renderHazards(alerts) {
+      const list = document.getElementById('hazard-list');
+      document.getElementById('hazard-count').innerText = alerts ? alerts.length : 0;
+      if (!alerts || alerts.length === 0) {
+        list.innerHTML = '<p style="font-size:0.75rem; color:var(--text-muted);">No active hazards detected.</p>';
+        return;
+      }
+
+      list.innerHTML = alerts.map(a => `
+        <div class="hazard-item ${a.urgency}">
+          <span style="font-size:1rem;">⚠️</span>
+          <div>
+            <strong>${a.message}</strong>
+            <span style="display:block; font-size:0.7rem; color:var(--text-muted); font-family:var(--font-mono);">
+              ${a.urgency.toUpperCase()} · ${a.direction.toUpperCase()} · Conf: ${Math.round(a.confidence * 100)}%
+            </span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // ── Text-to-Speech (TTS) ─────────────────────────────────────────────────────
+    function handleSpeechAdvisory(alerts) {
+      if (!document.getElementById('tts-toggle').checked) return;
+      if (!window.speechSynthesis || !alerts || alerts.length === 0) return;
+
+      const topAlert = alerts[0];
+      const now = Date.now();
+
+      // Avoid repeating identical warning within cooldown window
+      if (topAlert.message === state.lastSpokenText && (now - state.lastSpokenTime) < state.ttsCooldownMs) {
+        return;
+      }
+
+      state.lastSpokenText = topAlert.message;
+      state.lastSpokenTime = now;
+
+      const utter = new SpeechSynthesisUtterance(topAlert.message);
+      utter.rate = 1.05;
+      utter.pitch = 1.0;
+      window.speechSynthesis.speak(utter);
+    }
+
+    async function requestGroqExplanation() {
+      const expBox = document.getElementById('scene-explanation');
+      expBox.innerText = '🧠 Querying AI Guidance...';
+      try {
+        const payload = {
+          detections: state.lastDetections,
+          safety_alerts: state.lastAlerts,
+        };
+        const res = await fetch(`${state.apiUrl}/api/model/explain`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        expBox.innerText = `💡 ${data.service === 'groq' ? '[Groq LLaMA 3.3]' : '[Local Rule Engine]'}: ${data.explanation}`;
+      } catch (e) {
+        expBox.innerText = '💡 Advisory call failed: ' + e.message;
+      }
+    }
+
+    // ── Dropzone & Upload ────────────────────────────────────────────────────────
+    function setupDropzone() {
+      const dz = document.getElementById('dropzone');
+      ['dragenter', 'dragover'].forEach(n => dz.addEventListener(n, e => { e.preventDefault(); dz.classList.add('dragover'); }));
+      ['dragleave', 'drop'].forEach(n => dz.addEventListener(n, e => { e.preventDefault(); dz.classList.remove('dragover'); }));
+      dz.addEventListener('drop', e => {
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+          processFile(e.dataTransfer.files[0]);
+        }
+      });
+    }
+
+    function handleFileSelect(e) {
+      if (e.target.files && e.target.files[0]) {
+        processFile(e.target.files[0]);
+      }
+    }
+
+    function processFile(file) {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const b64 = e.target.result;
+        const img = document.getElementById('preview-image');
+        img.src = b64;
+        img.onload = () => {
+          runInferenceOnBase64(b64);
+        };
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // ── Synthetic Test Presets ───────────────────────────────────────────────────
+    function loadSyntheticPreset(type) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 640;
+      canvas.height = 480;
+      const ctx = canvas.getContext('2d');
+
+      // Gradient background
+      const grad = ctx.createLinearGradient(0, 0, 640, 480);
+      if (type === 'urban') {
+        grad.addColorStop(0, '#1E293B');
+        grad.addColorStop(1, '#0F172A');
+      } else if (type === 'hazard') {
+        grad.addColorStop(0, '#331D2C');
+        grad.addColorStop(1, '#1E101A');
+      } else {
+        grad.addColorStop(0, '#1E293B');
+        grad.addColorStop(1, '#020617');
+      }
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 640, 480);
+
+      ctx.fillStyle = '#fff';
+      ctx.font = '24px Inter, sans-serif';
+      ctx.fillText(`OptiCore Synthetic Test: ${type.toUpperCase()}`, 40, 240);
+
+      const b64 = canvas.toDataURL('image/jpeg', 0.85);
+      const img = document.getElementById('preview-image');
+      img.src = b64;
+      img.onload = () => {
+        runInferenceOnBase64(b64);
+      };
+    }
+
+    // ── Slider Updates ───────────────────────────────────────────────────────────
+    function updateParam(name, val) {
+      if (name === 'conf') {
+        state.confidence = val / 100;
+        document.getElementById('conf-val').innerText = `${val}%`;
+      } else if (name === 'iou') {
+        state.iou = val / 100;
+        document.getElementById('iou-val').innerText = `${val}%`;
+      } else if (name === 'imgsz') {
+        state.imageSize = parseInt(val, 10);
+        document.getElementById('imgsz-val').innerText = `${val} px`;
+      }
+    }
+  </script>
+</body>
+</html>

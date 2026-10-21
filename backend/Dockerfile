@@ -20,9 +20,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install PyTorch CPU first to avoid heavy 3GB+ CUDA wheels in standard Docker
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
+# Install PyTorch CPU (lightweight x86_64 wheel from PyTorch repo, or standard wheel on aarch64)
+RUN ARCH=$(uname -m) && \
+    pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    if [ "$ARCH" = "x86_64" ]; then \
+        pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu; \
+    else \
+        pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cpu torch torchvision; \
+    fi
 
 # Copy requirements and install remaining packages
 COPY requirements.txt .
