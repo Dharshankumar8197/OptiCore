@@ -199,8 +199,9 @@ if ($publicHttpsUrl) {
     Write-Host "   [*] PUBLIC HTTPS URL (Android, iPhone, iPad, Remote Laptops):" -ForegroundColor Cyan
     Write-Host "       $publicHttpsUrl" -ForegroundColor Yellow
     Write-Host "   ------------------------------------------------------------------" -ForegroundColor Cyan
-    Write-Host "   >> Open this HTTPS URL directly on your phone's browser (Safari/Chrome)" -ForegroundColor White
-    Write-Host "      to immediately use your phone's camera for real-time AI object detection!" -ForegroundColor White
+    Write-Host "   >> Live Vercel Web App (Direct Connected):" -ForegroundColor Cyan
+    Write-Host "       https://opti-core-web.vercel.app/?api=$publicHttpsUrl" -ForegroundColor Green
+    Write-Host "   >> Open the link above in any phone or browser to stream real-time vision!" -ForegroundColor White
     Write-Host "   >> Or configure your Next.js OptiCore Web App with:" -ForegroundColor White
     Write-Host "      NEXT_PUBLIC_API_URL=$publicHttpsUrl" -ForegroundColor DarkCyan
 } else {
@@ -219,10 +220,10 @@ Write-Host "====================================================================
 Write-Host ""
 
 # 10. Interactive Quick Action Prompt
-$targetBrowserUrl = if ($publicHttpsUrl) { $publicHttpsUrl } else { "http://localhost:$apiPort" }
+$targetBrowserUrl = if ($publicHttpsUrl) { "https://opti-core-web.vercel.app/?api=$publicHttpsUrl" } else { "http://localhost:$apiPort" }
 
 Write-Host "Quick Actions:" -ForegroundColor Yellow
-Write-Host "  [B] Open Web Vision Studio in Default Browser ($targetBrowserUrl)" -ForegroundColor White
+Write-Host "  [B] Open Live Vision Studio in Browser ($targetBrowserUrl)" -ForegroundColor White
 Write-Host "  [M] Open Interactive Control Center (menu.bat)" -ForegroundColor Green
 Write-Host "  [E] Open and Edit .env Configuration" -ForegroundColor White
 Write-Host "  [L] Stream Live Container Logs" -ForegroundColor White

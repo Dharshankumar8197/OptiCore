@@ -208,7 +208,10 @@ async def detect_from_file(
 async def detect_from_base64(payload: DetectBase64Request):
     """Run object detection on a base64 encoded image frame (from camera canvas)."""
     try:
-        raw_b64 = payload.image_base64
+        raw_b64 = payload.image_base64 or payload.image or payload.frame
+        if not raw_b64:
+            raise HTTPException(status_code=400, detail="Missing base64 image data in request payload")
+
         if "," in raw_b64:
             raw_b64 = raw_b64.split(",", 1)[1]
 
@@ -225,11 +228,14 @@ async def detect_from_base64(payload: DetectBase64Request):
             session_id=payload.session_id,
         )
         return result
+    except HTTPException:
+        raise
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
     except RuntimeError as re:
         raise HTTPException(status_code=503, detail=str(re))
     except Exception as e:
+        logger.error(f"Inference error in /api/model/detect/base64: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Inference error: {str(e)}")
 
 
@@ -237,7 +243,10 @@ async def detect_from_base64(payload: DetectBase64Request):
 async def track_video_frame(payload: TrackRequest):
     """Run ByteTrack tracking on an incoming video frame with isolated session tracking."""
     try:
-        raw_b64 = payload.image_base64
+        raw_b64 = payload.image_base64 or payload.image or payload.frame
+        if not raw_b64:
+            raise HTTPException(status_code=400, detail="Missing base64 image data in request payload")
+
         if "," in raw_b64:
             raw_b64 = raw_b64.split(",", 1)[1]
 
@@ -250,14 +259,18 @@ async def track_video_frame(payload: TrackRequest):
             confidence_threshold=payload.confidence_threshold,
             iou_threshold=payload.iou_threshold,
             image_size=payload.image_size,
-            session_id=payload.session_id,
+            return_annotated=payload.return_annotated or False,
+            session_id=payload.session_id or "default_session",
         )
         return result
+    except HTTPException:
+        raise
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
     except RuntimeError as re:
         raise HTTPException(status_code=503, detail=str(re))
     except Exception as e:
+        logger.error(f"Tracking error in /api/model/track: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Tracking error: {str(e)}")
 
 

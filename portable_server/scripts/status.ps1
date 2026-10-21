@@ -58,6 +58,7 @@ if ($publicUrl) {
     Write-Host "-- Public Ngrok Tunnel ------------------------------------------------" -ForegroundColor Cyan
     Write-Host " Status:          ACTIVE" -ForegroundColor Green
     Write-Host " Public URL:      $publicUrl" -ForegroundColor Yellow
+    Write-Host " Live Vercel App: https://opti-core-web.vercel.app/?api=$publicUrl" -ForegroundColor Green
 } else {
     Write-Host ""
     Write-Host "-- Public Ngrok Tunnel ------------------------------------------------" -ForegroundColor DarkGray

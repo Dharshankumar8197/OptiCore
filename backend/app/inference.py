@@ -348,13 +348,34 @@ def run_detection(
 
     try:
         t_infer_start = time.perf_counter()
-        results = model.predict(
-            source=image,
-            conf=conf,
-            iou=iou,
-            imgsz=imgsz,
-            verbose=False,
-        )
+        results = None
+
+        # If session_id is provided, attempt native Ultralytics ByteTrack tracking
+        if session_id:
+            try:
+                results = model.track(
+                    source=image,
+                    conf=conf,
+                    iou=iou,
+                    imgsz=imgsz,
+                    persist=True,
+                    tracker="bytetrack.yaml",
+                    verbose=False,
+                )
+            except Exception as track_err:
+                logger.warning("model.track with bytetrack error (%s), falling back to model.predict", track_err)
+                results = None
+
+        # Standard inference or fallback
+        if results is None:
+            results = model.predict(
+                source=image,
+                conf=conf,
+                iou=iou,
+                imgsz=imgsz,
+                verbose=False,
+            )
+
         t_infer_end = time.perf_counter()
         inference_ms = round((t_infer_end - t_infer_start) * 1000, 2)
 
@@ -364,31 +385,9 @@ def run_detection(
 
         if results and len(results) > 0:
             result = results[0]
+            boxes = getattr(result, "boxes", None)
 
-            # ByteTrack Tracking if session_id is provided
-            tracks = None
-            if session_id and boxes is not None and len(boxes) > 0:
-                tracker = _get_or_create_session_tracker(session_id)
-                if tracker is not None:
-                    try:
-                        boxes_np = boxes.cpu().numpy()
-                        tracks = tracker.update(boxes_np)
-                    except Exception as track_err:
-                        logger.warning("ByteTrack update error for session %s: %s", session_id, track_err)
-
-            boxes = result.boxes
             if boxes is not None and len(boxes) > 0:
-                # Build lookup map from bbox coordinate to track_id if ByteTrack returned tracks
-                track_id_map: Dict[int, int] = {}
-                if tracks is not None and len(tracks) > 0:
-                    for trk in tracks:
-                        # ByteTrack output format: [x1, y1, x2, y2, track_id, score, cls, idx]
-                        if len(trk) >= 5:
-                            t_id = int(trk[4])
-                            idx_ref = int(trk[7]) if len(trk) >= 8 else None
-                            if idx_ref is not None:
-                                track_id_map[idx_ref] = t_id
-
                 names_map = getattr(model, "names", OPTICORE_CLASSES)
 
                 for idx, box in enumerate(boxes):
@@ -409,9 +408,12 @@ def run_detection(
                     norm_w = round((bw / width) * 100, 2) if width > 0 else 0.0
                     norm_h = round((bh / height) * 100, 2) if height > 0 else 0.0
 
-                    assigned_track_id = track_id_map.get(idx)
-                    if assigned_track_id is None and box.id is not None:
-                        assigned_track_id = int(box.id[0])
+                    assigned_track_id = None
+                    if getattr(box, "id", None) is not None:
+                        try:
+                            assigned_track_id = int(box.id[0])
+                        except Exception:
+                            assigned_track_id = None
 
                     detections.append({
                         "id": f"det_{idx}",

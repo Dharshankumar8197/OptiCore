@@ -6,6 +6,16 @@
 
 export function getApiBase(): string {
   if (typeof window !== 'undefined') {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const queryApi = params.get('api') || params.get('server');
+      if (queryApi && queryApi.trim()) {
+        const clean = queryApi.trim().replace(/\/+$/, '');
+        localStorage.setItem('opticore_api_url', clean);
+        return clean;
+      }
+    } catch {}
+
     const saved = localStorage.getItem('opticore_api_url');
     if (saved && saved.trim()) return saved.trim().replace(/\/+$/, '');
   }

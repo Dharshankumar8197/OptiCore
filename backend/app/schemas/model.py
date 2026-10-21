@@ -77,7 +77,9 @@ class SafetyAlertItem(BaseModel):
 
 class DetectBase64Request(BaseModel):
     """Request payload for base64 image inference."""
-    image_base64: str
+    image_base64: Optional[str] = None
+    image: Optional[str] = None
+    frame: Optional[str] = None
     confidence_threshold: Optional[float] = None
     iou_threshold: Optional[float] = None
     image_size: Optional[int] = None
@@ -104,11 +106,14 @@ class DetectResponse(BaseModel):
 
 class TrackRequest(BaseModel):
     """Request payload for session-based ByteTrack tracking."""
-    session_id: str
-    image_base64: str
+    session_id: Optional[str] = None
+    image_base64: Optional[str] = None
+    image: Optional[str] = None
+    frame: Optional[str] = None
     confidence_threshold: Optional[float] = None
     iou_threshold: Optional[float] = None
     image_size: Optional[int] = None
+    return_annotated: Optional[bool] = False
 
 
 class ExplainRequest(BaseModel):

@@ -260,7 +260,7 @@ try {
                     $envMap = Parse-EnvFile $envPath
                     $port = if ($envMap["API_PORT"]) { [int]$envMap["API_PORT"] } else { 8000 }
                     $live = Get-ServerLiveStatus -Port $port
-                    $targetUrl = if ($live.PublicUrl) { $live.PublicUrl } else { "http://localhost:$port" }
+                    $targetUrl = if ($live.PublicUrl) { "https://opti-core-web.vercel.app/?api=$($live.PublicUrl)" } else { "http://localhost:$port" }
                     Start-Process $targetUrl
                 }
 
