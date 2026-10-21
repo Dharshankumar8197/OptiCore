@@ -108,6 +108,7 @@ function Clear-And-ShowDashboard {
     Write-Host " [D]     " -NoNewline -ForegroundColor Cyan; Write-Host "Server Diagnostics & Live Health Check" -ForegroundColor White
     Write-Host " [V]     " -NoNewline -ForegroundColor Cyan; Write-Host "Run 17-Point Automated Verification Suite" -ForegroundColor White
     Write-Host " [U]     " -NoNewline -ForegroundColor Cyan; Write-Host "Pull Latest Docker Image from GHCR" -ForegroundColor White
+    Write-Host " [A]     " -NoNewline -ForegroundColor Green; Write-Host "Live 3D Neural Brain Visualizer (30 FPS Animation)" -ForegroundColor Green
     Write-Host " [0 / Q] " -NoNewline -ForegroundColor Red; Write-Host "Exit Control Center" -ForegroundColor Red
     Write-Host ""
 
@@ -321,6 +322,27 @@ while ($keepRunning) {
             & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $updateScript
             Write-Host ""
             Read-Host "Press Enter to return to menu"
+        }
+
+        "^[Aa]$" {
+            $live = Get-ServerLiveStatus -Port $port
+            $srvText = if ($live.BackendOnline) { "ONLINE (Port $port)" } else { "STANDBY" }
+            $header = "OptiCore AI Server - 3D Neural Brain [$srvText]"
+            $sub = "YOLO26s · 20 Classes · Multi-Layer Cerebrum & Cerebellum Point Cloud"
+            $bottom = "[S] Start | [X] Stop | [T] Toggle Ngrok | [B] Browser | [Any Key] Return to Menu"
+
+            $actionKey = Show-BrainAnimation -DurationSeconds 0 -HeaderText $header -SubHeaderText $sub -BottomText $bottom
+            if ($actionKey) {
+                if ($actionKey -match "^[Ss]$") {
+                    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir "start.ps1")
+                } elseif ($actionKey -match "^[Xx]$") {
+                    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir "stop.ps1")
+                } elseif ($actionKey -match "^[Tt]$") {
+                    $newVal = Toggle-EnvSetting -EnvPath $envPath -SettingKey "NGROK_ENABLED"
+                } elseif ($actionKey -match "^[Bb]$") {
+                    Start-Process "http://localhost:$port"
+                }
+            }
         }
 
         "^(0|[Qq])$" {

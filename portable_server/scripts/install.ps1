@@ -88,7 +88,7 @@ if ($PackageRoot -ne $DestinationPath) {
     Show-ProgressBar -Activity "Deploying Package Files" -Percent 20 -Status "Copying launchers..."
 
     # Copy Launchers
-    $launchers = @("menu.bat", "run.bat", "install.bat", "start.bat", "stop.bat", "status.bat", "update.bat", "uninstall.bat", "docker-compose.yml", "README.md", ".env.example", "checksums.txt")
+    $launchers = @("menu.bat", "run.bat", "brain.bat", "install.bat", "start.bat", "stop.bat", "status.bat", "update.bat", "uninstall.bat", "docker-compose.yml", "README.md", ".env.example", "checksums.txt")
     foreach ($item in $launchers) {
         $srcPath = Join-Path $PackageRoot $item
         if (Test-Path $srcPath) {

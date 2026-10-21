@@ -28,7 +28,7 @@ function Add-TestResult {
 }
 
 # ── Test 1: Package Structure Integrity ─────────────────────────────────────────
-$requiredFiles = @("README.md", ".env.example", "docker-compose.yml", "menu.bat", "run.bat", "install.bat", "start.bat", "stop.bat", "status.bat", "update.bat", "uninstall.bat")
+$requiredFiles = @("README.md", ".env.example", "docker-compose.yml", "menu.bat", "run.bat", "brain.bat", "install.bat", "start.bat", "stop.bat", "status.bat", "update.bat", "uninstall.bat")
 $missing = @()
 foreach ($f in $requiredFiles) {
     if (-not (Test-Path (Join-Path $ServerRoot $f))) { $missing += $f }
@@ -200,7 +200,7 @@ if ($publicUrl) {
 Add-TestResult "14. Authentication & Security" "PASS" "CORS configured, secret redaction active, auth configurable via AUTH_REQUIRED"
 
 # ── Test 15: Windows Launcher Behavior ─────────────────────────────────────────
-$batchFiles = @("menu.bat", "run.bat", "install.bat", "start.bat", "stop.bat", "status.bat", "update.bat", "uninstall.bat")
+$batchFiles = @("menu.bat", "run.bat", "brain.bat", "install.bat", "start.bat", "stop.bat", "status.bat", "update.bat", "uninstall.bat")
 $allBatchOk = $true
 foreach ($b in $batchFiles) {
     if (-not (Test-Path (Join-Path $ServerRoot $b))) { $allBatchOk = $false }

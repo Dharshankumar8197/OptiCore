@@ -7,6 +7,8 @@ $ErrorActionPreference = "Continue"
 if (Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue) {
     $PSNativeCommandUseErrorActionPreference = $false
 }
+$Script:OptiCoreScriptsDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
+
 
 function Write-OptiCoreBanner {
     param([string]$Title = "Portable AI Server")
@@ -359,5 +361,68 @@ function Cycle-ConfidenceSetting {
     Set-EnvValue -EnvPath $EnvPath -Key "CONFIDENCE_THRESHOLD" -Value $next
     return $next
 }
+
+function Show-BrainAnimation {
+    param(
+        [double]$DurationSeconds = 0,
+        [string]$HeaderText = "OptiCore AI Server",
+        [string]$SubHeaderText = "YOLO26s · 20 Classes · Docker Desktop",
+        [string]$BottomText = "[S] Start | [X] Stop | [T] Toggle Ngrok | [B] Browser | [Any Key] Menu"
+    )
+
+    $scriptDir = if ($Script:OptiCoreScriptsDir) { $Script:OptiCoreScriptsDir } elseif ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
+    $csPath = Join-Path $scriptDir "BrainRenderer.cs"
+
+    if (-not ('BrainRenderer' -as [type])) {
+        if (Test-Path $csPath) {
+            try {
+                Add-Type -Path $csPath -ErrorAction Stop
+            } catch {
+                return $null
+            }
+        } else {
+            return $null
+        }
+    }
+
+    try {
+        [BrainRenderer]::EnableVT()
+        $brain = New-Object BrainRenderer
+        $sw = [System.Diagnostics.Stopwatch]::StartNew()
+        [Console]::CursorVisible = $false
+
+        $pressedKey = $null
+        while ($true) {
+            $elapsed = $sw.Elapsed.TotalSeconds
+            if ($DurationSeconds -gt 0 -and $elapsed -ge $DurationSeconds) {
+                break
+            }
+
+            if ([Console]::KeyAvailable) {
+                $k = [Console]::ReadKey($true)
+                $pressedKey = $k.KeyChar.ToString()
+                break
+            }
+
+            $w = [Math]::Max(40, [Console]::WindowWidth)
+            $h = [Math]::Max(15, [Console]::WindowHeight)
+
+            $frame = $brain.Render($elapsed, $w, $h, 3, 1, $HeaderText, $SubHeaderText, $BottomText)
+            [Console]::Out.Write($frame)
+            Start-Sleep -Milliseconds 33
+        }
+
+        return $pressedKey
+    } catch {
+        return $null
+    } finally {
+        try {
+            [Console]::CursorVisible = $true
+            [Console]::Out.Write([string][char]27 + "[0m")
+            Clear-Host
+        } catch {}
+    }
+}
+
 
 
