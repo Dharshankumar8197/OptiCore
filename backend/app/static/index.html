@@ -1200,7 +1200,7 @@
           body: JSON.stringify(payload),
         });
         const data = await res.json();
-        expBox.innerText = `💡 ${data.service === 'groq' ? '[Groq LLaMA 3.3]' : '[Local Rule Engine]'}: ${data.explanation}`;
+        expBox.innerText = `💡 ${data.service === 'groq' ? '[Groq AI]' : '[Local Rule Engine]'}: ${data.explanation}`;
       } catch (e) {
         expBox.innerText = '💡 Advisory call failed: ' + e.message;
       }

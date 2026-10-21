@@ -38,8 +38,8 @@ if (-not (Test-Path $envPath)) {
 
 $envMap = Parse-EnvFile $envPath
 $apiPort = if ($envMap["API_PORT"]) { $envMap["API_PORT"] } elseif ($envMap["PORT"]) { $envMap["PORT"] } else { "8000" }
-$imageName = if ($envMap["OPTICORE_IMAGE"]) { $envMap["OPTICORE_IMAGE"] } else { "ghcr.io/dharshankumar8197/opticore-server" }
-$imageVersion = if ($envMap["OPTICORE_VERSION"]) { $envMap["OPTICORE_VERSION"] } else { "1.0.0" }
+$imageName = if ($envMap["OPTICORE_IMAGE"]) { $envMap["OPTICORE_IMAGE"] } else { "ghcr.io/dharshankumar8197/opticore-backend" }
+$imageVersion = if ($envMap["OPTICORE_VERSION"]) { $envMap["OPTICORE_VERSION"] } else { "latest" }
 $fullImageRef = "${imageName}:${imageVersion}"
 
 $ngrokToken = $envMap["NGROK_AUTHTOKEN"]
@@ -235,7 +235,7 @@ if (-not $action -or $action.Trim() -eq "" -or $action -match "^[Bb]") {
     Log-Info "Opening Vision Studio: $targetBrowserUrl"
     Start-Process $targetBrowserUrl
 } elseif ($action -match "^[Aa]") {
-    Show-BrainAnimation -DurationSeconds 0 -HeaderText "OptiCore AI Server - 3D Neural Brain" -SubHeaderText "YOLO26s · 20 Classes · Multi-Layer Cerebrum & Cerebellum" -BottomText "[B] Open Browser | [M] Menu | [Any Key] Return"
+    Show-BrainAnimation -DurationSeconds 0 -HeaderText "OptiCore AI Server - 3D Neural Brain" -SubHeaderText "YOLO26s | 20 Classes | Multi-Layer Cerebrum & Cerebellum" -BottomText "[B] Open Browser | [M] Menu | [Any Key] Return"
 } elseif ($action -match "^[Mm]") {
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir "menu.ps1")
 } elseif ($action -match "^[Ee]") {

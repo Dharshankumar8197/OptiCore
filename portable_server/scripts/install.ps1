@@ -67,8 +67,8 @@ if (Test-Path $destEnv) {
     } else {
         Log-Warn "Template '.env.example' not found; will create minimal configuration."
         @"
-OPTICORE_IMAGE=ghcr.io/dharshankumar8197/opticore-server
-OPTICORE_VERSION=1.0.0
+OPTICORE_IMAGE=ghcr.io/dharshankumar8197/opticore-backend
+OPTICORE_VERSION=latest
 PORT=8000
 API_PORT=8000
 MODEL_PATH=./models/best.pt

@@ -126,7 +126,7 @@ if (Test-DockerCli) {
 # ── Test 7: GHCR Image Pull ─────────────────────────────────────────────────────
 $envPath = Join-Path $ServerRoot ".env"
 $envMap = Parse-EnvFile $envPath
-$fullImageRef = if ($envMap["OPTICORE_IMAGE"]) { "$($envMap['OPTICORE_IMAGE']):$($envMap['OPTICORE_VERSION'])" } else { "ghcr.io/dharshankumar8197/opticore-server:1.0.0" }
+$fullImageRef = if ($envMap["OPTICORE_IMAGE"]) { "$($envMap['OPTICORE_IMAGE']):$($envMap['OPTICORE_VERSION'])" } else { "ghcr.io/dharshankumar8197/opticore-backend:latest" }
 
 if (Test-DockerDaemon) {
     try {

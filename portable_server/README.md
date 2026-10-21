@@ -12,7 +12,7 @@ Turn any Windows 10/11 computer into an **OptiCore AI Inference Server** powered
 - **ByteTrack Tracking**: Isolated session tracking maintains persistent object IDs across frames without cross-client interference.
 - **Public Ngrok HTTPS Tunnel**: Automatic tunnel negotiation with live URL discovery printed directly to your console, providing the secure context required for mobile camera access (`getUserMedia`).
 - **On-Device Speech Advisory (TTS)**: Intelligent mobile/browser speech alerts for navigation hazards (potholes, cracks, approaching vehicles) with a 4-second cooldown to prevent repetitive spam.
-- **Optional Contextual AI Guidance**: Optional Groq LLaMA 3.3 integration for natural language scene narrations, with automatic fallback to local rule-based safety alerts.
+- **Optional Contextual AI Guidance**: Optional Groq (`openai/gpt-oss-120b`) integration for natural language scene narrations, with automatic fallback to local rule-based safety alerts.
 - **Windows-First Multi-Architecture**: Supports native ARM64 on Qualcomm Snapdragon X Plus/Elite Windows Copilot+ PCs as well as conventional Intel/AMD x64 systems via Docker Desktop.
 
 ---
@@ -150,8 +150,8 @@ If you are running the OptiCore Next.js Vision Studio web app on Vercel or local
 
 | Variable | Default | Description |
 | :--- | :--- | :--- |
-| `OPTICORE_IMAGE` | `ghcr.io/dharshankumar8197/opticore-server` | Container image reference |
-| `OPTICORE_VERSION` | `1.0.0` | Image tag / version |
+| `OPTICORE_IMAGE` | `ghcr.io/dharshankumar8197/opticore-backend` | Container image reference |
+| `OPTICORE_VERSION` | `latest` | Image tag / version |
 | `API_PORT` | `8000` | Host port mapped to backend |
 | `MODEL_PATH` | `./models/best.pt` | Model checkpoint path |
 | `CONFIDENCE_THRESHOLD` | `0.50` | Detection sensitivity (0.10 – 0.95) |

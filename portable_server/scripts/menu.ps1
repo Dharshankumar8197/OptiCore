@@ -23,6 +23,21 @@ if (-not (Test-Path $envPath)) {
     }
 }
 
+# Auto-launch 3D Neural Brain Visualizer in background companion window
+function Ensure-BrainVisualizerBackground {
+    try {
+        $running = Get-Process | Where-Object { $_.MainWindowTitle -like "*3D Neural Brain*" }
+        if (-not $running) {
+            $brainBat = Join-Path $ServerRoot "brain.bat"
+            if (Test-Path $brainBat) {
+                Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$brainBat`"" -WindowStyle Normal
+            }
+        }
+    } catch {}
+}
+
+Ensure-BrainVisualizerBackground
+
 function Clear-And-ShowDashboard {
     Clear-Host
     Write-OptiCoreBanner "Interactive Control Center"
@@ -73,14 +88,21 @@ function Clear-And-ShowDashboard {
         Write-Host "$tunnelState" -ForegroundColor DarkGray
     }
 
-    # Groq LLaMA 3.3 Scene Assistant
+    # Groq AI Scene Assistant (openai/gpt-oss-120b)
     if ($groqKey -and $groqKey.Trim() -ne "") {
         Write-Host "  * Groq Scene Narration:  " -NoNewline -ForegroundColor White
-        Write-Host "[ENABLED - $(Redact-Secret $groqKey)]" -ForegroundColor Green
+        Write-Host "[ENABLED - openai/gpt-oss-120b - $(Redact-Secret $groqKey)]" -ForegroundColor Green
     } else {
         Write-Host "  * Groq Scene Narration:  " -NoNewline -ForegroundColor White
         Write-Host "[DISABLED / OPTIONAL - Local Rule-Based Safety Active]" -ForegroundColor DarkGray
     }
+
+    # 3D Neural Visualizer Companion
+    $brainProc = Get-Process | Where-Object { $_.MainWindowTitle -like "*3D Neural Brain*" }
+    $brainText = if ($brainProc) { "[RUNNING IN BACKGROUND]" } else { "[STANDBY - Option A]" }
+    $brainColor = if ($brainProc) { "Green" } else { "DarkGray" }
+    Write-Host "  * 3D Neural Visualizer:  " -NoNewline -ForegroundColor White
+    Write-Host "$brainText" -ForegroundColor $brainColor
 
     # Detection Sensitivity
     Write-Host "  * Detection Sensitivity: " -NoNewline -ForegroundColor White
@@ -108,7 +130,7 @@ function Clear-And-ShowDashboard {
     Write-Host " [D]     " -NoNewline -ForegroundColor Cyan; Write-Host "Server Diagnostics & Live Health Check" -ForegroundColor White
     Write-Host " [V]     " -NoNewline -ForegroundColor Cyan; Write-Host "Run 17-Point Automated Verification Suite" -ForegroundColor White
     Write-Host " [U]     " -NoNewline -ForegroundColor Cyan; Write-Host "Pull Latest Docker Image from GHCR" -ForegroundColor White
-    Write-Host " [A]     " -NoNewline -ForegroundColor Green; Write-Host "Live 3D Neural Brain Visualizer (30 FPS Animation)" -ForegroundColor Green
+    Write-Host " [A]     " -NoNewline -ForegroundColor Green; Write-Host "3D Neural Brain Visualizer (Background Window: Restart / Focus)" -ForegroundColor Green
     Write-Host " [0 / Q] " -NoNewline -ForegroundColor Red; Write-Host "Exit Control Center" -ForegroundColor Red
     Write-Host ""
 
@@ -325,24 +347,10 @@ while ($keepRunning) {
         }
 
         "^[Aa]$" {
-            $live = Get-ServerLiveStatus -Port $port
-            $srvText = if ($live.BackendOnline) { "ONLINE (Port $port)" } else { "STANDBY" }
-            $header = "OptiCore AI Server - 3D Neural Brain [$srvText]"
-            $sub = "YOLO26s · 20 Classes · Multi-Layer Cerebrum & Cerebellum Point Cloud"
-            $bottom = "[S] Start | [X] Stop | [T] Toggle Ngrok | [B] Browser | [Any Key] Return to Menu"
-
-            $actionKey = Show-BrainAnimation -DurationSeconds 0 -HeaderText $header -SubHeaderText $sub -BottomText $bottom
-            if ($actionKey) {
-                if ($actionKey -match "^[Ss]$") {
-                    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir "start.ps1")
-                } elseif ($actionKey -match "^[Xx]$") {
-                    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir "stop.ps1")
-                } elseif ($actionKey -match "^[Tt]$") {
-                    $newVal = Toggle-EnvSetting -EnvPath $envPath -SettingKey "NGROK_ENABLED"
-                } elseif ($actionKey -match "^[Bb]$") {
-                    Start-Process "http://localhost:$port"
-                }
-            }
+            Write-Host ""
+            Ensure-BrainVisualizerBackground
+            Log-Success "3D Neural Brain Visualizer companion is active and running in the background."
+            Start-Sleep -Seconds 1
         }
 
         "^(0|[Qq])$" {

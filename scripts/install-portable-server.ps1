@@ -8,10 +8,11 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
 Write-Host ""
 Write-Host "======================================================================" -ForegroundColor Cyan
 Write-Host "   OptiCore Portable AI Server - One-Command Installer" -ForegroundColor Cyan
-Write-Host "   YOLO26s · Docker Desktop · ngrok HTTPS · Zero Client Python Required" -ForegroundColor DarkCyan
+Write-Host "   YOLO26s | Docker Desktop | ngrok HTTPS | Zero Client Python Required" -ForegroundColor DarkCyan
 Write-Host "======================================================================" -ForegroundColor Cyan
 Write-Host ""
 

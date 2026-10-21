@@ -5,7 +5,7 @@
 services:
   # ── OptiCore AI Vision & Inference Server ───────────────────────────────────
   server:
-    image: ${OPTICORE_IMAGE:-ghcr.io/dharshankumar8197/opticore-server}:${OPTICORE_VERSION:-1.0.0}
+    image: ${OPTICORE_IMAGE:-ghcr.io/dharshankumar8197/opticore-backend}:${OPTICORE_VERSION:-latest}
     container_name: opticore-ai-server
     restart: unless-stopped
     ports:
@@ -24,7 +24,7 @@ services:
       - MAX_UPLOAD_SIZE_MB=${MAX_UPLOAD_SIZE_MB:-15}
       - MAX_CONCURRENT_INFERENCES=${MAX_CONCURRENT_INFERENCES:-3}
       - GROQ_API_KEY=${GROQ_API_KEY:-}
-      - GROQ_MODEL=${GROQ_MODEL:-llama-3.3-70b-versatile}
+      - GROQ_MODEL=${GROQ_MODEL:-openai/gpt-oss-120b}
       - AUTH_REQUIRED=${AUTH_REQUIRED:-false}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change-this-jwt-secret-in-production-opticore}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-*}

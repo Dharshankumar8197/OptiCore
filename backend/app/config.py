@@ -52,7 +52,7 @@ class Settings(BaseSettings):
 
     # Optional AI Context Explainer
     groq_api_key: Optional[str] = None
-    groq_model: str = "llama-3.3-70b-versatile"
+    groq_model: str = "openai/gpt-oss-120b"
 
     class Config:
         env_file = ".env"

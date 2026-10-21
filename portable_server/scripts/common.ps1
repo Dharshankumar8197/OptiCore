@@ -10,12 +10,15 @@ if (Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction Sile
 $Script:OptiCoreScriptsDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
 
 
+# Ensure UTF-8 output encoding for console
+try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
+
 function Write-OptiCoreBanner {
     param([string]$Title = "Portable AI Server")
     Write-Host ""
     Write-Host "======================================================================" -ForegroundColor Cyan
     Write-Host "   OptiCore - Windows-First Portable AI Server ($Title)" -ForegroundColor Cyan
-    Write-Host "   YOLO26s best.pt · Docker Desktop · ngrok HTTPS · Web Vision Studio" -ForegroundColor DarkCyan
+    Write-Host "   YOLO26s best.pt | Docker Desktop | ngrok HTTPS | Web Vision Studio" -ForegroundColor DarkCyan
     Write-Host "======================================================================" -ForegroundColor Cyan
     Write-Host ""
 }
@@ -269,7 +272,7 @@ function Open-EnvEditor {
     Write-Host "   - NGROK_AUTHTOKEN : Required for public HTTPS mobile camera access." -ForegroundColor Yellow
     Write-Host "                       Get it free: https://dashboard.ngrok.com/get-started/your-authtoken" -ForegroundColor DarkGray
     Write-Host "   - NGROK_ENABLED   : Set to 'true' to start tunnel, or 'false' for local only." -ForegroundColor White
-    Write-Host "   - GROQ_API_KEY    : Optional key for LLaMA 3.3 contextual scene narration." -ForegroundColor White
+    Write-Host "   - GROQ_API_KEY    : Optional key for Groq contextual scene narration (openai/gpt-oss-120b)." -ForegroundColor White
     Write-Host "   - API_PORT        : Server host port (default: 8000)." -ForegroundColor White
     Write-Host "   - CONFIDENCE_THRESHOLD : Detection sensitivity (0.35 = sensitive, 0.50 = balanced, 0.70 = strict)." -ForegroundColor White
     Write-Host "======================================================================" -ForegroundColor Cyan
@@ -366,7 +369,7 @@ function Show-BrainAnimation {
     param(
         [double]$DurationSeconds = 0,
         [string]$HeaderText = "OptiCore AI Server",
-        [string]$SubHeaderText = "YOLO26s · 20 Classes · Docker Desktop",
+        [string]$SubHeaderText = "YOLO26s | 20 Classes | Docker Desktop",
         [string]$BottomText = "[S] Start | [X] Stop | [T] Toggle Ngrok | [B] Browser | [Any Key] Menu"
     )
 

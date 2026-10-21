@@ -22,7 +22,7 @@ if (Test-Path $envPath) {
 
 # 2. Pull Latest Image from GHCR
 $envMap = Parse-EnvFile $envPath
-$imageName = if ($envMap["OPTICORE_IMAGE"]) { $envMap["OPTICORE_IMAGE"] } else { "ghcr.io/dharshankumar8197/opticore-server" }
+$imageName = if ($envMap["OPTICORE_IMAGE"]) { $envMap["OPTICORE_IMAGE"] } else { "ghcr.io/dharshankumar8197/opticore-backend" }
 $imageVersion = if ($envMap["OPTICORE_VERSION"]) { $envMap["OPTICORE_VERSION"] } else { "latest" }
 $fullImageRef = "${imageName}:${imageVersion}"
 
